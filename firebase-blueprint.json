@@ -1,0 +1,101 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile in OMNI Super-App",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 256 },
+        "displayName": { "type": "string", "maxLength": 128 },
+        "photoURL": { "type": "string", "maxLength": 512 },
+        "omniScore": { "type": "number" },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["uid", "email"]
+    },
+    "GeminiMessage": {
+      "title": "GeminiMessage",
+      "description": "Persistent Gemini chat message",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "role": { "type": "string", "enum": ["user", "assistant"], "maxLength": 32 },
+        "content": { "type": "string", "maxLength": 10000 },
+        "actionType": { "type": "string", "maxLength": 64 },
+        "actionPayload": { "type": "string", "maxLength": 2048 },
+        "imageUrl": { "type": "string", "maxLength": 1000000 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "userId", "role", "content"]
+    },
+    "FocusSession": {
+      "title": "FocusSession",
+      "description": "Recorded focus or deep work session",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "duration": { "type": "number" },
+        "completedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "userId", "duration"]
+    },
+    "CommunityPost": {
+      "title": "CommunityPost",
+      "description": "Public community post in OMNI network",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "authorId": { "type": "string", "maxLength": 128 },
+        "author": { "type": "string", "maxLength": 128 },
+        "avatar": { "type": "string", "maxLength": 512 },
+        "title": { "type": "string", "maxLength": 256 },
+        "content": { "type": "string", "maxLength": 5000 },
+        "tag": { "type": "string", "maxLength": 64 },
+        "likes": { "type": "number" },
+        "comments": { "type": "number" },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "authorId", "author", "title", "content", "tag"]
+    },
+    "UserSettings": {
+      "title": "UserSettings",
+      "description": "User preferences and security settings",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "username": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 256 },
+        "biometrics": { "type": "boolean" },
+        "aiAnalysis": { "type": "boolean" },
+        "notifications": { "type": "boolean" },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["userId"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Private user profiles"
+    },
+    "/users/{userId}/gemini_messages/{messageId}": {
+      "schema": "GeminiMessage",
+      "description": "User private Gemini chat messages"
+    },
+    "/users/{userId}/focus_sessions/{sessionId}": {
+      "schema": "FocusSession",
+      "description": "User focus and productivity sessions"
+    },
+    "/users/{userId}/settings/{settingsId}": {
+      "schema": "UserSettings",
+      "description": "User app settings and configurations"
+    },
+    "/community_posts/{postId}": {
+      "schema": "CommunityPost",
+      "description": "Community discussions and topics"
+    }
+  }
+}

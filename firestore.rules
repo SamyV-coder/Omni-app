@@ -1,0 +1,93 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- USERS & SUBCOLLECTIONS ---
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false;
+      allow create: if isOwner(userId) && isValidId(userId) &&
+        incoming().keys().hasAll(['uid', 'email']) &&
+        incoming().uid == userId &&
+        incoming().email is string && incoming().email.size() <= 256;
+      allow update: if isOwner(userId) &&
+        incoming().uid == userId &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'omniScore', 'email']);
+      allow delete: if isOwner(userId);
+
+      match /gemini_messages/{messageId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(messageId) &&
+          incoming().keys().hasAll(['id', 'userId', 'role', 'content']) &&
+          incoming().userId == userId &&
+          incoming().role in ['user', 'assistant'] &&
+          incoming().content is string && incoming().content.size() <= 10000;
+        allow update: if isOwner(userId) && incoming().userId == userId;
+        allow delete: if isOwner(userId);
+      }
+
+      match /focus_sessions/{sessionId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(sessionId) &&
+          incoming().keys().hasAll(['id', 'userId', 'duration']) &&
+          incoming().userId == userId &&
+          incoming().duration is number;
+        allow update: if isOwner(userId) && incoming().userId == userId;
+        allow delete: if isOwner(userId);
+      }
+
+      match /settings/{settingsId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidId(settingsId) &&
+          incoming().userId == userId;
+        allow delete: if isOwner(userId);
+      }
+    }
+
+    // --- COMMUNITY POSTS ---
+    match /community_posts/{postId} {
+      allow read: if true;
+      allow create: if isSignedIn() &&
+        incoming().authorId == request.auth.uid &&
+        incoming().title is string && incoming().title.size() <= 256 &&
+        incoming().content is string && incoming().content.size() <= 5000 &&
+        incoming().tag is string && incoming().tag.size() <= 64;
+      allow update: if isSignedIn() && (
+        // Author can edit post
+        (existing().authorId == request.auth.uid && incoming().authorId == request.auth.uid) ||
+        // Other signed in users can like the post
+        (incoming().diff(existing()).affectedKeys().hasOnly(['likes']))
+      );
+      allow delete: if isSignedIn() && existing().authorId == request.auth.uid;
+    }
+
+    // Connection test document
+    match /test/connection {
+      allow read: if true;
+    }
+  }
+}

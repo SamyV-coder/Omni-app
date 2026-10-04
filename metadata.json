@@ -1,0 +1,6 @@
+{
+  "name": "OMNI",
+  "description": "A futuristic, all-in-one Super-App centralizing productivity, finances, social, and services.",
+  "requestFramePermissions": ["camera", "microphone", "geolocation"],
+  "capabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
