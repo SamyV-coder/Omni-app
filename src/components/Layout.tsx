@@ -21,7 +21,8 @@ import {
   HardDrive,
   Settings as SettingsIcon,
   Heart,
-  Coffee
+  Coffee,
+  Crown
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn, vibrate } from "../lib/utils";
@@ -36,18 +37,16 @@ const navItems = [
   { path: "/", label: "HUB", icon: LayoutDashboard },
   { path: "/focus", label: "FOCUS", icon: Target },
   { path: "/wallet", label: "ACADEMY", icon: Wallet },
-  { path: "/maps", label: "MAPS", icon: MapPin },
-  { path: "/gmail", label: "GMAIL", icon: Mail },
-  { path: "/drive", label: "DRIVE", icon: HardDrive },
   { path: "/community", label: "COMMUNITY", icon: Users },
   { path: "/service", label: "SERVICE", icon: Briefcase },
   { path: "/life-os", label: "LIFE OS", icon: Sparkles },
+  { path: "/upgrade", label: "UPGRADE", icon: Crown },
   { path: "/settings", label: "SETTINGS", icon: SettingsIcon },
   { path: "/help", label: "HELP", icon: HelpCircle },
 ];
 
 export function Layout() {
-  const { user, signInWithGoogle, signOut, omniScore } = useAuth();
+  const { user, directUser, signInWithGoogle, signOut, omniScore } = useAuth();
   const { language, currency, nationality } = usePreferences();
   const navigate = useNavigate();
   const location = useLocation();
@@ -122,18 +121,18 @@ export function Layout() {
           </div>
         </div>
 
-        {/* User Card / Firebase Google Auth */}
+        {/* User Card / Firebase Google Auth or Direct Mobile Profile */}
         <div className="mb-4 p-3.5 rounded-2xl bg-white/[0.03] border border-white/10 backdrop-blur-md">
-          {user ? (
+          {user || directUser ? (
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5 overflow-hidden">
                 <img 
-                  src={user.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${user.uid}`} 
+                  src={user?.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${user?.uid || directUser?.email || "OMNI"}`} 
                   alt="Avatar" 
                   className="w-9 h-9 rounded-xl border border-indigo-500/30 object-cover bg-black"
                 />
                 <div className="overflow-hidden">
-                  <p className="text-xs font-medium text-white truncate">{user.displayName || "Agent OMNI"}</p>
+                  <p className="text-xs font-medium text-white truncate">{user?.displayName || directUser?.displayName || "Agent OMNI"}</p>
                   <p className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                     Score : {omniScore} pts
@@ -343,31 +342,31 @@ export function Layout() {
         )}
       </AnimatePresence>
 
-      {/* Bottom Nav for Mobile with Smooth Overflow */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-18 bg-black/95 backdrop-blur-2xl border-t border-white/10 flex items-center justify-start overflow-x-auto px-3 gap-2 z-50 scrollbar-none">
+      {/* Bottom Nav for Mobile with Smooth Overflow & Safe Areas */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 pb-[env(safe-area-inset-bottom,0px)] bg-black/95 backdrop-blur-2xl border-t border-white/10 flex items-center justify-between px-2 gap-1 z-50 overflow-x-auto scrollbar-none">
         {navItems.map((item) => (
           <NavLink
             key={item.path}
             to={item.path}
             className={({ isActive }) =>
               cn(
-                "flex flex-col items-center justify-center min-w-[56px] h-14 rounded-2xl transition-all duration-300 relative shrink-0",
+                "flex flex-col items-center justify-center min-w-[50px] flex-1 h-13 rounded-xl transition-all duration-200 relative shrink-0",
                 isActive
-                  ? "text-indigo-400 bg-white/[0.04]"
-                  : "text-white/40 hover:text-white/80"
+                  ? "text-indigo-400 bg-white/[0.05]"
+                  : "text-white/40 hover:text-white/80 active:scale-95"
               )
             }
           >
             {({ isActive }) => (
               <>
                 {isActive && (
-                  <div className="absolute top-0 left-1/2 -translate-x-1/2 w-5 h-1 bg-gradient-to-r from-indigo-400 to-purple-500 rounded-b-full shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
+                  <div className="absolute top-0 left-1/2 -translate-x-1/2 w-4 h-1 bg-gradient-to-r from-indigo-400 to-purple-500 rounded-b-full shadow-[0_0_8px_rgba(99,102,241,0.6)]" />
                 )}
                 <item.icon className={cn(
-                  "w-4 h-4 mb-1 transition-transform",
+                  "w-4 h-4 mb-0.5 transition-transform",
                   isActive ? "drop-shadow-[0_0_8px_rgba(99,102,241,0.5)] scale-110" : ""
                 )} />
-                <span className="text-[8px] font-mono tracking-wider uppercase">{item.label}</span>
+                <span className="text-[7.5px] font-mono tracking-wider uppercase">{item.label}</span>
               </>
             )}
           </NavLink>

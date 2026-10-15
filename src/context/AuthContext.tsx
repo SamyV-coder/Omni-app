@@ -22,11 +22,20 @@ export const SCOPES = [
 // In-memory token cache (never stored in localStorage/sessionStorage)
 let inMemoryAccessToken: string | null = null;
 
+export interface DirectUserCredentials {
+  email: string;
+  phone: string;
+  displayName?: string;
+  createdAt: string;
+}
+
 interface AuthContextType {
   user: User | null;
+  directUser: DirectUserCredentials | null;
   loading: boolean;
   accessToken: string | null;
   signInWithGoogle: () => Promise<string | null>;
+  setDirectCredentials: (creds: { email: string; phone: string; password?: string }) => void;
   signOut: () => Promise<void>;
   omniScore: number;
   updateScore: (pointsToAdd: number) => Promise<void>;
@@ -34,9 +43,11 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
+  directUser: null,
   loading: true,
   accessToken: null,
   signInWithGoogle: async () => null,
+  setDirectCredentials: () => {},
   signOut: async () => {},
   omniScore: 0,
   updateScore: async () => {},
@@ -44,9 +55,35 @@ const AuthContext = createContext<AuthContextType>({
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [directUser, setDirectUserState] = useState<DirectUserCredentials | null>(() => {
+    try {
+      const stored = localStorage.getItem("omni_direct_user");
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
   const [loading, setLoading] = useState(true);
-  const [omniScore, setOmniScore] = useState(0);
+  const [omniScore, setOmniScore] = useState(() => {
+    const local = localStorage.getItem("omni_local_score");
+    return local ? parseInt(local, 10) : 0;
+  });
   const [accessToken, setAccessToken] = useState<string | null>(null);
+
+  const setDirectCredentials = (creds: { email: string; phone: string; password?: string }) => {
+    const profile: DirectUserCredentials = {
+      email: creds.email,
+      phone: creds.phone,
+      displayName: creds.email.split("@")[0] || "Agent OMNI",
+      createdAt: new Date().toISOString()
+    };
+    setDirectUserState(profile);
+    try {
+      localStorage.setItem("omni_direct_user", JSON.stringify(profile));
+    } catch (e) {
+      console.warn("Storage error", e);
+    }
+  };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -109,6 +146,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await firebaseSignOut(auth);
       inMemoryAccessToken = null;
       setAccessToken(null);
+      setDirectUserState(null);
+      localStorage.removeItem("omni_direct_user");
     } catch (error) {
       console.error("Sign-Out Error:", error);
     }
@@ -131,7 +170,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, accessToken, signInWithGoogle, signOut, omniScore, updateScore }}>
+    <AuthContext.Provider value={{ user, directUser, loading, accessToken, signInWithGoogle, setDirectCredentials, signOut, omniScore, updateScore }}>
       {children}
     </AuthContext.Provider>
   );

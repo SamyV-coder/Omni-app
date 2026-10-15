@@ -51,6 +51,12 @@ export function Focus() {
   const [newReminderTime, setNewReminderTime] = useState("12:00");
   const [showAddReminder, setShowAddReminder] = useState(false);
 
+  // New Alarm Modal / Form
+  const [showAddAlarm, setShowAddAlarm] = useState(false);
+  const [newAlarmLabel, setNewAlarmLabel] = useState("");
+  const [newAlarmTime, setNewAlarmTime] = useState("08:00");
+  const [newAlarmType, setNewAlarmType] = useState<RoutineAlarm["type"]>("focus_session");
+
   useEffect(() => {
     setAlarms(getStoredAlarms());
     setReminders(getStoredReminders());
@@ -62,6 +68,37 @@ export function Focus() {
     const updated = alarms.map((a) => (a.id === id ? { ...a, enabled: !a.enabled } : a));
     setAlarms(updated);
     saveStoredAlarms(updated);
+  };
+
+  const handleDeleteAlarm = (id: string) => {
+    vibrate(20);
+    sound.playClick();
+    const updated = alarms.filter((a) => a.id !== id);
+    setAlarms(updated);
+    saveStoredAlarms(updated);
+  };
+
+  const handleAddAlarm = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAlarmLabel.trim()) return;
+    vibrate(30);
+    sound.playSuccess();
+
+    const created: RoutineAlarm = {
+      id: `alarm-${Date.now()}`,
+      label: newAlarmLabel.trim(),
+      time: newAlarmTime,
+      days: [1, 2, 3, 4, 5],
+      enabled: true,
+      type: newAlarmType,
+      actionTarget: "/focus"
+    };
+
+    const updated = [created, ...alarms];
+    setAlarms(updated);
+    saveStoredAlarms(updated);
+    setNewAlarmLabel("");
+    setShowAddAlarm(false);
   };
 
   const handleTestAlarm = (alarm: RoutineAlarm) => {
@@ -493,11 +530,77 @@ export function Focus() {
                   <p className="text-[11px] font-mono text-white/40">SYNCHRONISATION AUTO</p>
                 </div>
               </div>
-              <span className="text-[10px] font-mono uppercase bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                Actif
-              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowAddAlarm(!showAddAlarm)}
+                  className="px-2.5 py-1 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-[11px] font-mono text-purple-300 flex items-center gap-1 border border-purple-500/30 transition-all"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Nouvelle Alarme</span>
+                </button>
+                <span className="text-[10px] font-mono uppercase bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Actif
+                </span>
+              </div>
             </div>
+
+            {/* Add Alarm Form */}
+            {showAddAlarm && (
+              <form onSubmit={handleAddAlarm} className="mb-4 p-4 rounded-2xl bg-purple-500/10 border border-purple-500/30 space-y-3 relative z-10">
+                <div>
+                  <label className="text-[10px] font-mono uppercase text-white/50 block mb-1">Intitulé de l'alarme</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: Réveil matinal, Séance cardio, Étirements..."
+                    value={newAlarmLabel}
+                    onChange={(e) => setNewAlarmLabel(e.target.value)}
+                    className="w-full bg-black/60 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-mono uppercase text-white/50 block mb-1">Heure</label>
+                    <input
+                      type="time"
+                      required
+                      value={newAlarmTime}
+                      onChange={(e) => setNewAlarmTime(e.target.value)}
+                      className="w-full bg-black/60 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-mono uppercase text-white/50 block mb-1">Catégorie</label>
+                    <select
+                      value={newAlarmType}
+                      onChange={(e) => setNewAlarmType(e.target.value as any)}
+                      className="w-full bg-black/60 border border-white/10 rounded-xl px-2 py-1.5 text-xs text-white font-mono"
+                    >
+                      <option value="wakeup">Réveil IA</option>
+                      <option value="focus_session">Focus Session</option>
+                      <option value="deep_work_break">Pause active</option>
+                      <option value="evening_winddown">Soirée & Sommeil</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddAlarm(false)}
+                    className="px-3 py-1.5 rounded-xl text-xs font-mono text-white/50 hover:text-white"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-mono font-medium shadow-md shadow-purple-600/30"
+                  >
+                    Programmer l'alarme
+                  </button>
+                </div>
+              </form>
+            )}
 
             {/* List of routine alarms */}
             <div className="space-y-3 relative z-10">
@@ -542,6 +645,13 @@ export function Focus() {
                         ) : (
                           <ToggleLeft className="w-7 h-7" />
                         )}
+                      </button>
+                      <button
+                        onClick={() => handleDeleteAlarm(alarm.id)}
+                        title="Supprimer l'alarme"
+                        className="p-1.5 rounded-lg text-white/20 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>

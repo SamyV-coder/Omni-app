@@ -176,3 +176,107 @@ export function initRoutineScheduler() {
   setInterval(checkAlarms, 10000);
   checkAlarms();
 }
+
+/**
+ * Parses natural language schedule description (e.g. "Réveil à 06:45, focus 09:00, pause 12:30, bilan 20:00")
+ * and registers customizable alarms and reminders in localStorage.
+ */
+export function parseAndGenerateRoutineFromPrompt(text: string): { newAlarms: RoutineAlarm[]; count: number } {
+  const timeRegex = /(?:à\s*|a\s*|vers\s*)?(\d{1,2})[hH:](\d{2})?\s*(?:-\s*)?([^,.;\n]+)?/gi;
+  const matches = [...text.matchAll(timeRegex)];
+
+  const currentAlarms = getStoredAlarms();
+  const generated: RoutineAlarm[] = [];
+
+  matches.forEach((match, index) => {
+    const rawHours = parseInt(match[1], 10);
+    const rawMinutes = match[2] ? parseInt(match[2], 10) : 0;
+    let label = match[3] ? match[3].trim() : "";
+
+    if (rawHours >= 0 && rawHours <= 23 && rawMinutes >= 0 && rawMinutes <= 59) {
+      const timeStr = `${String(rawHours).padStart(2, "0")}:${String(rawMinutes).padStart(2, "0")}`;
+      
+      if (!label || label.length < 2) {
+        if (rawHours < 9) label = "Réveil & Routine matinale";
+        else if (rawHours < 12) label = "Bloc Deep Work & Focus";
+        else if (rawHours < 14) label = "Pause déjeuner & Hydratation";
+        else if (rawHours < 18) label = "Session Focus après-midi";
+        else label = "Bilan & Déconnexion";
+      }
+
+      const type: RoutineAlarm["type"] = rawHours < 9 
+        ? "wakeup" 
+        : label.toLowerCase().includes("pause") || label.toLowerCase().includes("déjeuner")
+        ? "deep_work_break"
+        : rawHours >= 20
+        ? "evening_winddown"
+        : "focus_session";
+
+      generated.push({
+        id: `auto-${Date.now()}-${index}`,
+        label: label.charAt(0).toUpperCase() + label.slice(1),
+        time: timeStr,
+        days: [1, 2, 3, 4, 5],
+        enabled: true,
+        type,
+        actionTarget: "/focus"
+      });
+    }
+  });
+
+  if (generated.length === 0) {
+    // If no direct times matched, create a smart balanced routine based on keywords
+    const isMorningEarly = text.toLowerCase().includes("tôt") || text.toLowerCase().includes("matinal");
+    generated.push(
+      {
+        id: `auto-${Date.now()}-1`,
+        label: "Réveil & Activation IA",
+        time: isMorningEarly ? "06:30" : "07:30",
+        days: [1, 2, 3, 4, 5],
+        enabled: true,
+        type: "wakeup",
+        actionTarget: "/focus"
+      },
+      {
+        id: `auto-${Date.now()}-2`,
+        label: "Bloc Focus Principal",
+        time: "09:30",
+        days: [1, 2, 3, 4, 5],
+        enabled: true,
+        type: "focus_session",
+        actionTarget: "/focus"
+      },
+      {
+        id: `auto-${Date.now()}-3`,
+        label: "Pause Active & Marche",
+        time: "12:15",
+        days: [1, 2, 3, 4, 5],
+        enabled: true,
+        type: "deep_work_break"
+      },
+      {
+        id: `auto-${Date.now()}-4`,
+        label: "Sprint Focus Pomodoro",
+        time: "15:00",
+        days: [1, 2, 3, 4, 5],
+        enabled: true,
+        type: "focus_session",
+        actionTarget: "/focus"
+      },
+      {
+        id: `auto-${Date.now()}-5`,
+        label: "Déconnexion & Sommeil",
+        time: "22:00",
+        days: [1, 2, 3, 4, 5, 6, 0],
+        enabled: true,
+        type: "evening_winddown"
+      }
+    );
+  }
+
+  // Prepend and save
+  const merged = [...generated, ...currentAlarms];
+  saveStoredAlarms(merged);
+
+  return { newAlarms: generated, count: generated.length };
+}

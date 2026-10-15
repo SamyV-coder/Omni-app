@@ -11,7 +11,9 @@ import {
   Target, 
   Wallet,
   Users,
-  Compass
+  Compass,
+  Crown,
+  Clock
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { sound } from "../lib/sound";
@@ -43,35 +45,24 @@ export function MobileSpeedDial() {
       }
     },
     {
-      id: "maps-view",
-      title: "Maps OMNI",
-      icon: MapPin,
+      id: "routine-alarms",
+      title: "Mes Alarmes",
+      icon: Clock,
       color: "bg-indigo-600 text-white shadow-indigo-500/30",
       border: "border-indigo-400/40",
       onClick: () => {
-        navigate("/maps");
+        navigate("/focus");
         setIsOpen(false);
       }
     },
     {
-      id: "gmail-view",
-      title: "Gmail",
-      icon: Mail,
-      color: "bg-rose-600 text-white shadow-rose-500/30",
-      border: "border-rose-400/40",
-      onClick: () => {
-        navigate("/gmail");
-        setIsOpen(false);
-      }
-    },
-    {
-      id: "drive-view",
-      title: "Drive",
-      icon: HardDrive,
+      id: "upgrade-view",
+      title: "Pass Upgrade",
+      icon: Crown,
       color: "bg-amber-600 text-white shadow-amber-500/30",
       border: "border-amber-400/40",
       onClick: () => {
-        navigate("/drive");
+        navigate("/upgrade");
         setIsOpen(false);
       }
     },

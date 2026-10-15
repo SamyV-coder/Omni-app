@@ -13,6 +13,7 @@ import { Help } from "./pages/Help";
 import { Maps } from "./pages/Maps";
 import { Gmail } from "./pages/Gmail";
 import { Drive } from "./pages/Drive";
+import { Upgrade } from "./pages/Upgrade";
 import { AuthProvider } from "./context/AuthContext";
 import { PreferencesProvider } from "./context/PreferencesContext";
 
@@ -54,6 +55,7 @@ export default function App() {
             <Route path="service" element={<Service />} />
             <Route path="life-os" element={<LifeOS />} />
             <Route path="gemini" element={<Navigate to="/life-os" replace />} />
+            <Route path="upgrade" element={<Upgrade />} />
             <Route path="maps" element={<Maps />} />
             <Route path="gmail" element={<Gmail />} />
             <Route path="drive" element={<Drive />} />

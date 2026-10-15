@@ -17,7 +17,8 @@ import {
   Mail,
   HardDrive,
   Mic,
-  Maximize2
+  Maximize2,
+  Crown
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -83,6 +84,18 @@ export function CommandPalette({ isOpen, onClose }: { isOpen: boolean; onClose: 
         navigate("/focus", { state: { duration: 50 * 60, autoStart: true } });
         onClose();
       },
+    },
+    {
+      id: "nav-upgrade",
+      title: "Pass & Offres Upgrade (Premium)",
+      subtitle: "Coach IA VIP, Boosts Marketplace et Pass All-Access",
+      category: "Navigation",
+      icon: Crown,
+      action: () => {
+        navigate("/upgrade");
+        onClose();
+      },
+      shortcut: "U"
     },
     {
       id: "nav-lifeos",

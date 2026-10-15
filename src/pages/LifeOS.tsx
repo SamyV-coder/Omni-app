@@ -17,7 +17,8 @@ import {
   Trash2,
   Mic,
   MicOff,
-  Volume2
+  Volume2,
+  Bell
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import ReactMarkdown from "react-markdown";
@@ -33,9 +34,10 @@ import {
   speakText, 
   createSpeechRecognizer 
 } from "../lib/voiceCommands";
+import { parseAndGenerateRoutineFromPrompt } from "../lib/routineScheduler";
 
 interface ActionPayload {
-  type: "NAVIGATE" | "START_FOCUS" | "LEARN_FINANCE" | "CREATE_POST" | "VIEW_SERVICES" | "OPEN_SETTINGS";
+  type: "NAVIGATE" | "START_FOCUS" | "LEARN_FINANCE" | "CREATE_POST" | "VIEW_SERVICES" | "OPEN_SETTINGS" | "VIEW_ROUTINES";
   target: string;
   title: string;
   detail?: string;
@@ -52,11 +54,10 @@ interface Message {
 }
 
 const QUICK_ACTIONS = [
+  { label: "⏰ Programmer ma Routine", prompt: "Génère ma routine : Réveil à 07:00, Focus Deep Work à 09:30, Pause à 12:30, Session Pomodoro à 15:00 et Sommeil à 22:30." },
   { label: "⚡ Lancer Focus 25m", prompt: "Lance une session Focus de 25 minutes pour m'aider à avancer." },
-  { label: "📍 Voir les Hubs Maps", prompt: "Ouvre Google Maps et montre-moi les hubs de coworking et cafés de travail." },
-  { label: "📬 Consulter Gmail", prompt: "Ouvre ma boîte Gmail pour voir mes derniers messages." },
-  { label: "📁 Explorer Google Drive", prompt: "Ouvre mon Drive pour accéder à mes documents et fichiers de travail." },
   { label: "💰 Gérer mon argent (50/30/20)", prompt: "Explique-moi comment appliquer concrètement la règle des 50/30/20 pour mon budget." },
+  { label: "👑 Découvrir les Pass Upgrade", prompt: "Quels sont les avantages des offres OMNI Upgrade et du Coach VIP ?" },
   { label: "🎨 Générer un visuel futuriste", prompt: "/image cybernetic neon command center hologram 4k" },
 ];
 
@@ -257,6 +258,8 @@ export function LifeOS() {
       navigate("/wallet", { state: { prefilledTopic: action.detail } });
     } else if (action.type === "CREATE_POST") {
       navigate("/community", { state: { openModal: true, initialTag: "General" } });
+    } else if (action.type === "VIEW_ROUTINES") {
+      navigate("/focus", { state: { tab: "routines" } });
     } else if (action.target) {
       navigate(action.target);
     }
@@ -285,6 +288,43 @@ export function LifeOS() {
     setIsTyping(true);
 
     const isImageRequest = textToSend.toLowerCase().startsWith("/image ");
+    const isRoutineRequest = 
+      textToSend.toLowerCase().includes("routine") || 
+      textToSend.toLowerCase().includes("emploi du temps") || 
+      textToSend.toLowerCase().includes("programme ma journée") || 
+      textToSend.toLowerCase().includes("réveille-moi") ||
+      (textToSend.toLowerCase().includes("alarme") && textToSend.match(/\d{1,2}[hH:]/));
+
+    if (isRoutineRequest) {
+      try {
+        const { newAlarms, count } = parseAndGenerateRoutineFromPrompt(textToSend);
+        sound.playSuccess();
+        vibrate([50, 70, 50]);
+
+        const summary = newAlarms.map(a => `• **${a.time}** : ${a.label}`).join("\n");
+        const routineReply: Message = {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: `⚡ **Routine Intelligente Générée avec Succès !**\n\nJ'ai analysé ton emploi du temps et programmé **${count} alarmes & rappels personnalisés** :\n\n${summary}\n\nToutes ces alarmes sont actives en arrière-plan et entièrement modifiables à tout moment.`,
+          action: {
+            type: "VIEW_ROUTINES",
+            target: "/focus",
+            title: "Voir & Personnaliser mes Alarmes",
+            detail: `${count} alarmes actives`
+          },
+          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        };
+
+        if (!user) setMessages(prev => [...prev, routineReply]);
+        else await saveMessage(routineReply);
+        speakText(`Ta routine avec ${count} alarmes a été programmée avec succès.`);
+      } catch (err) {
+        console.error("Routine generation error:", err);
+      } finally {
+        setIsTyping(false);
+      }
+      return;
+    }
 
     if (isImageRequest) {
       const prompt = textToSend.slice(7).trim();

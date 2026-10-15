@@ -24,7 +24,11 @@ import {
   Clock,
   Gauge,
   Coffee,
-  Heart
+  Heart,
+  MapPin,
+  Mail,
+  HardDrive,
+  ExternalLink
 } from "lucide-react";
 import { motion } from "motion/react";
 import { Link } from "react-router-dom";
@@ -71,7 +75,7 @@ function Toggle({ enabled, onChange, locked = false }: { enabled: boolean; onCha
 }
 
 export function Settings() {
-  const { user, signInWithGoogle, signOut } = useAuth();
+  const { user, directUser, signInWithGoogle, signOut } = useAuth();
   const { 
     language, 
     setLanguage, 
@@ -180,8 +184,8 @@ export function Settings() {
       .then(res => res.json())
       .then(data => {
         if (data) {
-          setUsername(data.username || user?.displayName || "");
-          setEmail(data.email || user?.email || "");
+          setUsername(data.username || user?.displayName || directUser?.displayName || "");
+          setEmail(data.email || user?.email || directUser?.email || "");
           setBiometrics(data.biometrics !== undefined ? Boolean(data.biometrics) : true);
           setAiAnalysis(data.aiAnalysis !== undefined ? Boolean(data.aiAnalysis) : true);
           setNotifications(Boolean(data.notifications));
@@ -190,9 +194,11 @@ export function Settings() {
       })
       .catch(err => {
         console.error("Erreur de chargement des paramètres:", err);
+        setUsername(user?.displayName || directUser?.displayName || "");
+        setEmail(user?.email || directUser?.email || "");
         setLoading(false);
       });
-  }, [user]);
+  }, [user, directUser]);
 
   // Sauvegarder les paramètres dans l'API
   const saveSettings = (updates: any) => {
@@ -240,6 +246,77 @@ export function Settings() {
       </header>
 
       <div className="space-y-6">
+        {/* Services Google Workspace & Cartographie (Déplacés depuis la barre principale) */}
+        <section className="rounded-3xl bg-gradient-to-r from-blue-950/20 via-indigo-950/20 to-purple-950/20 border border-blue-500/20 overflow-hidden backdrop-blur-md">
+          <div className="p-6 border-b border-white/10 flex items-center justify-between bg-white/[0.02]">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                <Link2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-lg font-medium tracking-wide text-white">Services Google Workspace & Outils</h2>
+                <p className="text-xs text-white/50">Accède directement à tes outils connectés sans encombrer la barre mobile</p>
+              </div>
+            </div>
+            <span className="text-[10px] font-mono uppercase bg-blue-500/10 text-blue-300 px-2.5 py-1 rounded-full border border-blue-500/20">
+              Intégrations 1P
+            </span>
+          </div>
+
+          <div className="p-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Google Maps */}
+            <Link
+              to="/maps"
+              className="p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all flex flex-col justify-between group"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="p-2.5 rounded-xl bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 group-hover:scale-110 transition-transform">
+                  <MapPin className="w-5 h-5" />
+                </div>
+                <ExternalLink className="w-4 h-4 text-white/30 group-hover:text-white transition-colors" />
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-white group-hover:text-indigo-300 transition-colors">Google Maps</h3>
+                <p className="text-[11px] text-white/40 mt-0.5">Navigation, recherche de lieux, cafés et hubs de travail</p>
+              </div>
+            </Link>
+
+            {/* Gmail */}
+            <Link
+              to="/gmail"
+              className="p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all flex flex-col justify-between group"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="p-2.5 rounded-xl bg-rose-500/15 text-rose-400 border border-rose-500/30 group-hover:scale-110 transition-transform">
+                  <Mail className="w-5 h-5" />
+                </div>
+                <ExternalLink className="w-4 h-4 text-white/30 group-hover:text-white transition-colors" />
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-white group-hover:text-rose-300 transition-colors">Gmail</h3>
+                <p className="text-[11px] text-white/40 mt-0.5">Boîte de réception, lecture et rédaction assistée par IA</p>
+              </div>
+            </Link>
+
+            {/* Google Drive */}
+            <Link
+              to="/drive"
+              className="p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all flex flex-col justify-between group"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="p-2.5 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30 group-hover:scale-110 transition-transform">
+                  <HardDrive className="w-5 h-5" />
+                </div>
+                <ExternalLink className="w-4 h-4 text-white/30 group-hover:text-white transition-colors" />
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-white group-hover:text-amber-300 transition-colors">Google Drive</h3>
+                <p className="text-[11px] text-white/40 mt-0.5">Exploration, stockage cloud et gestion des documents</p>
+              </div>
+            </Link>
+          </div>
+        </section>
+
         {/* Profil & Identité Firebase */}
         <section className="rounded-3xl bg-white/5 border border-white/10 overflow-hidden backdrop-blur-md">
           <div className="p-6 border-b border-white/10 flex items-center justify-between bg-white/[0.02]">
@@ -247,12 +324,17 @@ export function Settings() {
               <User className="w-5 h-5 text-indigo-400" />
               <h2 className="text-lg font-medium tracking-wide">Profil & Authentification Firebase</h2>
             </div>
-            {user && (
+            {user ? (
               <span className="text-[11px] font-mono text-emerald-400 flex items-center gap-1.5 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 Compte Google Actif
               </span>
-            )}
+            ) : directUser ? (
+              <span className="text-[11px] font-mono text-indigo-400 flex items-center gap-1.5 bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-500/20">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                Profil Mobile Actif ({directUser.phone})
+              </span>
+            ) : null}
           </div>
           <div className="p-6 space-y-6">
             <div className="flex flex-col sm:flex-row items-center gap-6">
@@ -287,7 +369,7 @@ export function Settings() {
               </div>
             </div>
 
-            {!user ? (
+            {!user && !directUser ? (
               <div className="pt-2">
                 <button
                   onClick={() => signInWithGoogle()}
@@ -298,10 +380,19 @@ export function Settings() {
                 </button>
               </div>
             ) : (
-              <div className="pt-2">
+              <div className="pt-2 flex items-center justify-between">
+                {!user && (
+                  <button
+                    onClick={() => signInWithGoogle()}
+                    className="px-4 py-2 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/30 text-xs font-mono tracking-wider transition-colors flex items-center gap-2"
+                  >
+                    <LogIn className="w-3.5 h-3.5" />
+                    <span>Lier Google Firebase</span>
+                  </button>
+                )}
                 <button
                   onClick={() => signOut()}
-                  className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-red-400 border border-white/10 text-xs font-mono tracking-wider transition-colors flex items-center gap-2"
+                  className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-red-400 border border-white/10 text-xs font-mono tracking-wider transition-colors flex items-center gap-2 ml-auto"
                 >
                   <LogOut className="w-3.5 h-3.5" />
                   <span>Se déconnecter</span>
