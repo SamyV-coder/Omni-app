@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { Analytics } from "@vercel/analytics/react";
 import { Layout } from "./components/Layout";
 import { Hub } from "./pages/Hub";
 import { Focus } from "./pages/Focus";
@@ -37,6 +38,7 @@ export default function App() {
               setHasOnboarded(true);
             }} 
           />
+          <Analytics />
         </PreferencesProvider>
       </AuthProvider>
     );
@@ -63,6 +65,7 @@ export default function App() {
             <Route path="help" element={<Help />} />
           </Route>
         </Routes>
+        <Analytics />
       </Router>
     </PreferencesProvider>
   </AuthProvider>
