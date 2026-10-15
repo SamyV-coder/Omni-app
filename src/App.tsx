@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 import { Layout } from "./components/Layout";
 import { Hub } from "./pages/Hub";
 import { Focus } from "./pages/Focus";
@@ -64,6 +65,7 @@ export default function App() {
           </Route>
         </Routes>
       </Router>
+      <SpeedInsights />
     </PreferencesProvider>
   </AuthProvider>
   );
