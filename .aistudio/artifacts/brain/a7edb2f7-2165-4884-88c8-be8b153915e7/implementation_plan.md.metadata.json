@@ -1,6 +1,6 @@
 {
-  "summary": "Plan d'implémentation pour l'optimisation mobile WebView, authentification directe au 1er lancement (Email, Mot de passe, Téléphone), refonte des onglets, onglet Upgrade centralisé et générateur de routine intelligent.",
-  "updatedAt": "2026-10-15T22:46:27.907409784Z",
+  "summary": "Plan pour internationaliser totalement l'application OMNI : sélecteur d'indicatif téléphonique mondial (+1, +44, +33, +212, +213, +971, etc.) dans le formulaire d'inscription, centrage automatique de Google Maps sur la position GPS réelle de l'utilisateur (ou vue mondiale globale au lieu de Paris), et détection automatique de la langue/pays du système.",
+  "updatedAt": "2026-10-15T23:00:06.532961205Z",
   "requestFeedback": true,
   "userFacing": true
 }

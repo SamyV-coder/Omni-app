@@ -47,13 +47,27 @@ const PreferencesContext = createContext<PreferencesState | undefined>(undefined
 const STORAGE_KEY = "omni_user_preferences";
 
 export function PreferencesProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguageState] = useState<LanguageCode>("fr");
-  const [nationality, setNationalityState] = useState<string>("FR");
-  const [currency, setCurrencyState] = useState<CurrencyCode>("EUR");
+  const [language, setLanguageState] = useState<LanguageCode>(() => {
+    if (typeof navigator !== "undefined") {
+      const code = navigator.language.slice(0, 2).toLowerCase();
+      if (["fr", "en", "es", "de", "it", "pt", "ja", "zh", "ar", "ru", "hi", "ko"].includes(code)) {
+        return code as LanguageCode;
+      }
+    }
+    return "en"; // Default universal language
+  });
+  const [nationality, setNationalityState] = useState<string>(() => {
+    if (typeof navigator !== "undefined" && navigator.language.includes("-")) {
+      const country = navigator.language.split("-")[1].toUpperCase();
+      if (country) return country;
+    }
+    return "US"; // Default universal country
+  });
+  const [currency, setCurrencyState] = useState<CurrencyCode>("USD");
   const [timeFormat, setTimeFormatState] = useState<TimeFormat>("24h");
   const [unitSystem, setUnitSystemState] = useState<UnitSystem>("metric");
   const [timezone, setTimezoneState] = useState<string>(
-    typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "Europe/Paris"
+    typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "UTC"
   );
 
   useEffect(() => {

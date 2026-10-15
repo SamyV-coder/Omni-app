@@ -4,6 +4,7 @@ import { Hexagon, Mail, Lock, Phone, ArrowRight, ShieldCheck, Sparkles, CheckCir
 import { vibrate } from "../lib/utils";
 import { sound } from "../lib/sound";
 import { useAuth } from "../context/AuthContext";
+import { ALL_COUNTRIES } from "../data/internationalData";
 
 export function Onboarding({ onComplete }: { onComplete: () => void }) {
   const { setDirectCredentials, signInWithGoogle } = useAuth();
@@ -13,6 +14,17 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [phone, setPhone] = useState("");
+  const [dialCode, setDialCode] = useState(() => {
+    // Detect system language or default to universal +1 / international
+    const navLang = typeof navigator !== "undefined" ? navigator.language : "en";
+    if (navLang.startsWith("fr")) return "+33";
+    if (navLang.startsWith("es")) return "+34";
+    if (navLang.startsWith("de")) return "+49";
+    if (navLang.startsWith("it")) return "+39";
+    if (navLang.startsWith("ar")) return "+212";
+    if (navLang.startsWith("en-GB")) return "+44";
+    return "+1"; // Default international
+  });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -52,10 +64,12 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
     vibrate([40, 60, 40]);
     sound.playSuccess();
 
+    const fullPhone = phone.trim().startsWith("+") ? phone.trim() : `${dialCode} ${phone.trim()}`;
+
     // Persist direct credentials
     setDirectCredentials({
       email: email.trim(),
-      phone: phone.trim(),
+      phone: fullPhone,
       password: password
     });
 
@@ -196,20 +210,69 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
             </div>
           </div>
 
-          {/* Numéro de téléphone */}
+          {/* Numéro de téléphone avec Indicatif Mondial */}
           <div className="space-y-1.5">
-            <label className="text-[11px] font-mono uppercase tracking-wider text-white/60 flex items-center gap-1.5">
-              <Phone className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Numéro de Téléphone</span>
+            <label className="text-[11px] font-mono uppercase tracking-wider text-white/60 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <Phone className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Numéro de Téléphone</span>
+              </span>
+              <span className="text-[10px] text-emerald-400/80 font-mono">
+                {ALL_COUNTRIES.find(c => c.dialCode === dialCode)?.flag} {dialCode}
+              </span>
             </label>
-            <div className="relative">
+            <div className="flex gap-2">
+              {/* Sélecteur d'indicatif mondial */}
+              <select
+                value={dialCode}
+                onChange={(e) => {
+                  vibrate(15);
+                  setDialCode(e.target.value);
+                }}
+                className="bg-black/60 border border-white/10 rounded-2xl py-3 px-3 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono w-28 shrink-0 transition-colors"
+              >
+                <option value="+1">🇺🇸/🇨🇦 +1</option>
+                <option value="+44">🇬🇧 +44</option>
+                <option value="+33">🇫🇷 +33</option>
+                <option value="+32">🇧🇪 +32</option>
+                <option value="+41">🇨🇭 +41</option>
+                <option value="+49">🇩🇪 +49</option>
+                <option value="+34">🇪🇸 +34</option>
+                <option value="+39">🇮🇹 +39</option>
+                <option value="+351">🇵🇹 +351</option>
+                <option value="+212">🇲🇦 +212</option>
+                <option value="+213">🇩🇿 +213</option>
+                <option value="+216">🇹🇳 +216</option>
+                <option value="+221">🇸🇳 +221</option>
+                <option value="+225">🇨🇮 +225</option>
+                <option value="+237">🇨🇲 +237</option>
+                <option value="+243">🇨🇩 +243</option>
+                <option value="+971">🇦🇪 +971</option>
+                <option value="+966">🇸🇦 +966</option>
+                <option value="+974">🇶🇦 +974</option>
+                <option value="+20">🇪🇬 +20</option>
+                <option value="+90">🇹🇷 +90</option>
+                <option value="+55">🇧🇷 +55</option>
+                <option value="+52">🇲🇽 +52</option>
+                <option value="+61">🇦🇺 +61</option>
+                <option value="+81">🇯🇵 +81</option>
+                <option value="+86">🇨🇳 +86</option>
+                <option value="+91">🇮🇳 +91</option>
+                {ALL_COUNTRIES.filter(c => c.dialCode && !["+1", "+44", "+33", "+32", "+41", "+49", "+34", "+39", "+351", "+212", "+213", "+216", "+221", "+225", "+237", "+243", "+971", "+966", "+974", "+20", "+90", "+55", "+52", "+61", "+81", "+86", "+91"].includes(c.dialCode)).map(c => (
+                  <option key={`${c.code}-${c.dialCode}`} value={c.dialCode}>
+                    {c.flag} {c.dialCode} ({c.name})
+                  </option>
+                ))}
+              </select>
+
+              {/* Champ numéro libre sans préfixe forcé */}
               <input 
                 type="tel"
                 required
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                placeholder="+33 6 12 34 56 78"
-                className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 px-4 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-emerald-500 transition-colors font-mono"
+                placeholder="612345678"
+                className="flex-1 bg-white/5 border border-white/10 rounded-2xl py-3 px-4 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-emerald-500 transition-colors font-mono"
               />
             </div>
           </div>

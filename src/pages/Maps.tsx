@@ -18,14 +18,15 @@ import { loadGoogleMapsScript, GMP_ATTRIBUTION_ID } from "../lib/maps";
 import { vibrate } from "../lib/utils";
 import { sound } from "../lib/sound";
 
-// Default coordinates: Paris / Europe Center
-const DEFAULT_CENTER = { lat: 48.8566, lng: 2.3522 };
+// Neutral World Overview Center (Atlantic/Global Equator view)
+const DEFAULT_CENTER = { lat: 20.0, lng: 0.0 };
 
+// Default international hubs (shown if user searches or requests global recommendations)
 const PRESET_PLACES = [
-  { name: "Coworking Tech Hub", lat: 48.8606, lng: 2.3376, type: "work", desc: "Espace ultra-rapide, écrans 4K & cabines insonorisées" },
-  { name: "Café Deep Focus", lat: 48.8529, lng: 2.3499, type: "coffee", desc: "Ambiance calme, matcha latte & prises disponibles" },
-  { name: "OMNI HQ Lab", lat: 48.8738, lng: 2.2950, type: "lab", desc: "QG d'innovation, bornes biométriques et serveurs neuraux" },
-  { name: "Silent Library Zone", lat: 48.8462, lng: 2.3449, type: "quiet", desc: "Zéro bruit garanti pour sessions de deep work" },
+  { name: "Global Innovation Hub", lat: 25.2048, lng: 55.2708, type: "work", desc: "Espace ultra-rapide, écrans 4K & cabines insonorisées" },
+  { name: "Nomad Focus Lounge", lat: 37.7749, lng: -122.4194, type: "coffee", desc: "Ambiance calme, matcha latte & prises disponibles" },
+  { name: "OMNI Global Cyber Lab", lat: 51.5074, lng: -0.1278, type: "lab", desc: "QG d'innovation, bornes biométriques et serveurs neuraux" },
+  { name: "International Deep Work Space", lat: 35.6762, lng: 139.6503, type: "quiet", desc: "Zéro bruit garanti pour sessions de deep work" },
 ];
 
 export function Maps() {
@@ -114,10 +115,10 @@ export function Maps() {
           throw new Error("Google Maps SDK not loaded");
         }
 
-        // Initialize Map with mandatory internalUsageAttributionIds
+        // Initialize Map with global overview zoom before GPS sync
         const map = new google.maps.Map(mapContainerRef.current, {
           center: DEFAULT_CENTER,
-          zoom: 13,
+          zoom: 3,
           mapId: "OMNI_DARK_MAP",
           disableDefaultUI: false,
           zoomControl: true,
@@ -213,8 +214,8 @@ export function Maps() {
             (err) => {
               if (!isMounted) return;
               setLocating(false);
-              setLocationStatus("Position par défaut (Paris)");
-              console.warn("Auto-geolocation error:", err.message);
+              setLocationStatus("Vue globale internationale");
+              console.warn("Auto-geolocation notice:", err.message);
             },
             { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
           );
