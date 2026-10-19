@@ -2,6 +2,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { ALL_COUNTRIES, ALL_CURRENCIES, CountryData, CurrencyData } from "../data/internationalData";
 
+import { getTranslation, Translations } from "../data/translations";
+
 export type LanguageCode = "fr" | "en" | "es" | "de" | "it" | "pt" | "ja" | "zh" | "ar" | "ru" | "hi" | "ko";
 export type CurrencyCode = string;
 export type TimeFormat = "24h" | "12h";
@@ -32,6 +34,7 @@ interface PreferencesState {
   timeFormat: TimeFormat;
   unitSystem: UnitSystem;
   timezone: string;
+  t: Translations;
   setLanguage: (lang: LanguageCode) => void;
   setNationality: (nat: string) => void;
   setCurrency: (curr: CurrencyCode) => void;
@@ -48,6 +51,15 @@ const STORAGE_KEY = "omni_user_preferences";
 
 export function PreferencesProvider({ children }: { children: ReactNode }) {
   const [language, setLanguageState] = useState<LanguageCode>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.language && ["fr", "en", "es", "de", "it", "pt", "ja", "zh", "ar", "ru", "hi", "ko"].includes(parsed.language)) {
+          return parsed.language as LanguageCode;
+        }
+      }
+    } catch (e) {}
     if (typeof navigator !== "undefined") {
       const code = navigator.language.slice(0, 2).toLowerCase();
       if (["fr", "en", "es", "de", "it", "pt", "ja", "zh", "ar", "ru", "hi", "ko"].includes(code)) {
@@ -56,36 +68,73 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     }
     return "en"; // Default universal language
   });
+
   const [nationality, setNationalityState] = useState<string>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.nationality) return parsed.nationality;
+      }
+    } catch (e) {}
     if (typeof navigator !== "undefined" && navigator.language.includes("-")) {
       const country = navigator.language.split("-")[1].toUpperCase();
       if (country) return country;
     }
     return "US"; // Default universal country
   });
-  const [currency, setCurrencyState] = useState<CurrencyCode>("USD");
-  const [timeFormat, setTimeFormatState] = useState<TimeFormat>("24h");
-  const [unitSystem, setUnitSystemState] = useState<UnitSystem>("metric");
-  const [timezone, setTimezoneState] = useState<string>(
-    typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "UTC"
-  );
 
-  useEffect(() => {
+  const [currency, setCurrencyState] = useState<CurrencyCode>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (parsed.language) setLanguageState(parsed.language);
-        if (parsed.nationality) setNationalityState(parsed.nationality);
-        if (parsed.currency) setCurrencyState(parsed.currency);
-        if (parsed.timeFormat) setTimeFormatState(parsed.timeFormat);
-        if (parsed.unitSystem) setUnitSystemState(parsed.unitSystem);
-        if (parsed.timezone) setTimezoneState(parsed.timezone);
+        if (parsed.currency) return parsed.currency;
       }
-    } catch (e) {
-      console.warn("Could not load preferences from localStorage", e);
+    } catch (e) {}
+    return "USD";
+  });
+
+  const [timeFormat, setTimeFormatState] = useState<TimeFormat>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.timeFormat) return parsed.timeFormat;
+      }
+    } catch (e) {}
+    return "24h";
+  });
+
+  const [unitSystem, setUnitSystemState] = useState<UnitSystem>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.unitSystem) return parsed.unitSystem;
+      }
+    } catch (e) {}
+    return "metric";
+  });
+
+  const [timezone, setTimezoneState] = useState<string>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.timezone) return parsed.timezone;
+      }
+    } catch (e) {}
+    return typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "UTC";
+  });
+
+  // Keep document lang and dir updated
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      document.documentElement.lang = language;
+      document.documentElement.dir = language === "ar" ? "rtl" : "ltr";
     }
-  }, []);
+  }, [language]);
 
   const savePreferences = (patch: Partial<{
     language: LanguageCode;
@@ -96,6 +145,8 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     timezone: string;
   }>) => {
     try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      const existing = stored ? JSON.parse(stored) : {};
       const current = {
         language,
         nationality,
@@ -103,6 +154,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
         timeFormat,
         unitSystem,
         timezone,
+        ...existing,
         ...patch,
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(current));
@@ -152,6 +204,8 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     return `${Math.round(converted).toLocaleString()} ${curObj.symbol}`;
   };
 
+  const t = getTranslation(language);
+
   return (
     <PreferencesContext.Provider
       value={{
@@ -161,6 +215,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
         timeFormat,
         unitSystem,
         timezone,
+        t,
         setLanguage,
         setNationality,
         setCurrency,

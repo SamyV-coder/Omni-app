@@ -18,26 +18,34 @@ import {
   HardDrive,
   Mic,
   Maximize2,
-  Crown
+  Crown,
+  Wifi,
+  WifiOff
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { detectActionFromText, ActionPayload } from "../lib/lifeOsAssistant";
+import { useOffline } from "../context/OfflineContext";
+import { vibrate } from "../lib/utils";
+import { sound } from "../lib/sound";
 
 interface PaletteItem {
   id: string;
   title: string;
   subtitle: string;
-  category: "Navigation" | "Action Focus" | "Academy" | "Gemini";
+  category: "Navigation" | "Action Focus" | "Academy" | "Gemini" | "Mode Hors-Ligne";
   icon: any;
   action: () => void;
   shortcut?: string;
+  isAiAction?: boolean;
 }
 
 export function CommandPalette({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const navigate = useNavigate();
+  const { isOffline, toggleForceOffline } = useOffline();
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
 
-  const items: PaletteItem[] = [
+  const baseItems: PaletteItem[] = [
     {
       id: "focus-25",
       title: "Lancer un Sprint Focus (25 min)",
@@ -61,6 +69,18 @@ export function CommandPalette({ isOpen, onClose }: { isOpen: boolean; onClose: 
         onClose();
       },
       shortcut: "Z"
+    },
+    {
+      id: "toggle-offline",
+      title: isOffline ? "Repasser En Ligne" : "Activer le Mode Hors-Ligne Forcé",
+      subtitle: isOffline ? "Rétablir la synchronisation réseau" : "Tester le fonctionnement 100% autonome sans internet",
+      category: "Mode Hors-Ligne",
+      icon: isOffline ? Wifi : WifiOff,
+      action: () => {
+        toggleForceOffline();
+        onClose();
+      },
+      shortcut: "O"
     },
     {
       id: "settings-voice",
@@ -202,7 +222,7 @@ export function CommandPalette({ isOpen, onClose }: { isOpen: boolean; onClose: 
     {
       id: "nav-settings",
       title: "Paramètres & Sécurité",
-      subtitle: "Biométrie, notifications et profil",
+      subtitle: "Langue, devises, notifications et profil",
       category: "Navigation",
       icon: SettingsIcon,
       action: () => {
@@ -223,15 +243,70 @@ export function CommandPalette({ isOpen, onClose }: { isOpen: boolean; onClose: 
     },
   ];
 
-  const filtered = items.filter((item) => {
-    const q = query.toLowerCase().trim();
-    if (!q) return true;
-    return (
-      item.title.toLowerCase().includes(q) ||
-      item.subtitle.toLowerCase().includes(q) ||
-      item.category.toLowerCase().includes(q)
-    );
-  });
+  // Dynamic filtered list with NLP Intent Detection
+  const trimmed = query.trim();
+  let filtered: PaletteItem[] = [];
+
+  if (trimmed) {
+    const detected = detectActionFromText(trimmed);
+    if (detected) {
+      filtered.push({
+        id: "detected-action",
+        title: detected.title,
+        subtitle: `Action intelligente détectée pour « ${trimmed} »`,
+        category: "Gemini",
+        icon: Zap,
+        isAiAction: true,
+        action: () => {
+          vibrate(30);
+          sound.playClick();
+          if (detected.type === "START_FOCUS") {
+            navigate("/focus", { state: { autoStart: true, duration: detected.detail ? parseInt(detected.detail, 10) * 60 : 25 * 60 } });
+          } else if (detected.type === "LEARN_FINANCE") {
+            navigate("/wallet", { state: { prefilledTopic: detected.detail } });
+          } else if (detected.type === "VIEW_ROUTINES") {
+            navigate("/focus", { state: { tab: "routines" } });
+          } else if (detected.type === "TOGGLE_OFFLINE") {
+            toggleForceOffline();
+          } else if (detected.target) {
+            navigate(detected.target);
+          }
+          onClose();
+        },
+        shortcut: "↵"
+      });
+    }
+
+    // Always offer direct execution with Life OS
+    filtered.push({
+      id: "ask-lifeos-query",
+      title: `Demander à Life OS : « ${trimmed} »`,
+      subtitle: "Poser cette question ou converser avec l'assistant",
+      category: "Gemini",
+      icon: Sparkles,
+      isAiAction: true,
+      action: () => {
+        vibrate(30);
+        sound.playClick();
+        navigate("/life-os", { state: { prefilledPrompt: trimmed } });
+        onClose();
+      },
+      shortcut: "↵"
+    });
+
+    const staticMatched = baseItems.filter((item) => {
+      const q = trimmed.toLowerCase();
+      return (
+        item.title.toLowerCase().includes(q) ||
+        item.subtitle.toLowerCase().includes(q) ||
+        item.category.toLowerCase().includes(q)
+      );
+    });
+
+    filtered = [...filtered, ...staticMatched];
+  } else {
+    filtered = baseItems;
+  }
 
   useEffect(() => {
     setSelectedIndex(0);
@@ -291,7 +366,7 @@ export function CommandPalette({ isOpen, onClose }: { isOpen: boolean; onClose: 
               autoFocus
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Rechercher une action, lancer Focus, poser une question... (Cmd+K)"
+              placeholder="Commande libre, action, poser une question... (ex: 'focus 15m', 'budget')"
               className="w-full bg-transparent text-white placeholder:text-white/30 text-sm focus:outline-none font-light"
             />
             <span className="text-[10px] font-mono tracking-widest px-2 py-0.5 rounded bg-white/10 text-white/50">
@@ -301,52 +376,52 @@ export function CommandPalette({ isOpen, onClose }: { isOpen: boolean; onClose: 
 
           {/* Results List */}
           <div className="max-h-96 overflow-y-auto p-2 divide-y divide-white/5">
-            {filtered.length === 0 ? (
-              <div className="p-8 text-center text-white/40 text-sm font-light">
-                Aucun résultat pour "{query}". Essaie "Focus", "Academy" ou "Gemini".
-              </div>
-            ) : (
-              filtered.map((item, index) => {
-                const Icon = item.icon;
-                const isSelected = index === selectedIndex;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={item.action}
-                    onMouseEnter={() => setSelectedIndex(index)}
-                    className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl text-left transition-all ${
+            {filtered.map((item, index) => {
+              const Icon = item.icon;
+              const isSelected = index === selectedIndex;
+              return (
+                <button
+                  key={item.id}
+                  onClick={item.action}
+                  onMouseEnter={() => setSelectedIndex(index)}
+                  className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl text-left transition-all cursor-pointer ${
+                    isSelected
+                      ? item.isAiAction
+                        ? "bg-gradient-to-r from-indigo-600/30 to-purple-600/30 text-white border border-indigo-500/40 shadow-[0_0_20px_rgba(99,102,241,0.2)]"
+                        : "bg-indigo-600/20 text-white border border-indigo-500/30 shadow-[inset_0_0_15px_rgba(99,102,241,0.15)]"
+                      : "text-white/80 hover:bg-white/5 border border-transparent"
+                  }`}
+                >
+                  <div
+                    className={`p-2.5 rounded-xl shrink-0 ${
                       isSelected
-                        ? "bg-indigo-600/20 text-white border border-indigo-500/30 shadow-[inset_0_0_15px_rgba(99,102,241,0.15)]"
-                        : "text-white/80 hover:bg-white/5 border border-transparent"
+                        ? item.isAiAction
+                          ? "bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.6)]"
+                          : "bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)]"
+                        : item.isAiAction
+                        ? "bg-indigo-500/20 text-indigo-300"
+                        : "bg-white/5 text-white/60"
                     }`}
                   >
-                    <div
-                      className={`p-2.5 rounded-xl shrink-0 ${
-                        isSelected
-                          ? "bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)]"
-                          : "bg-white/5 text-white/60"
-                      }`}
-                    >
-                      <Icon className="w-4 h-4" />
+                    <Icon className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium truncate">{item.title}</span>
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-white/30 px-1.5 py-0.5 rounded bg-white/5">
+                        {item.category}
+                      </span>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium truncate">{item.title}</span>
-                        <span className="text-[10px] font-mono uppercase tracking-wider text-white/30 px-1.5 py-0.5 rounded bg-white/5">
-                          {item.category}
-                        </span>
-                      </div>
-                      <p className="text-xs text-white/40 truncate mt-0.5 font-light">
-                        {item.subtitle}
-                      </p>
-                    </div>
-                    {isSelected && (
-                      <ArrowRight className="w-4 h-4 text-indigo-400 shrink-0 animate-pulse" />
-                    )}
-                  </button>
-                );
-              })
-            )}
+                    <p className="text-xs text-white/40 truncate mt-0.5 font-light">
+                      {item.subtitle}
+                    </p>
+                  </div>
+                  {isSelected && (
+                    <ArrowRight className="w-4 h-4 text-indigo-400 shrink-0 animate-pulse" />
+                  )}
+                </button>
+              );
+            })}
           </div>
 
           {/* Footer Navigation Hints */}
@@ -356,7 +431,7 @@ export function CommandPalette({ isOpen, onClose }: { isOpen: boolean; onClose: 
               <span>↵ Valider</span>
               <span>ESC Fermer</span>
             </div>
-            <span className="text-indigo-400 font-sans text-xs">OMNI Quick Command</span>
+            <span className="text-indigo-400 font-sans text-xs">OMNI Life OS NLP Engine</span>
           </div>
         </motion.div>
       </div>

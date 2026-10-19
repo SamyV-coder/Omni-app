@@ -29,10 +29,82 @@ import { vibrate, cn } from "../lib/utils";
 import { sound } from "../lib/sound";
 import { useAuth } from "../context/AuthContext";
 import { usePreferences } from "../context/PreferencesContext";
+import { useOffline } from "../context/OfflineContext";
+
+const OFFLINE_TOPIC_ADVICE: Record<string, string> = {
+  default: `### 💡 Analyse & Concept clé : La Maîtrise Financière Personnelle
+L'argent n'est pas une fin en soi, c'est un carburant pour financer ta liberté, réduire ton stress et concrétiser tes projets réels.
+
+### 🚀 Stratégies concrètes à appliquer immédiatement
+1. **Appliquer la règle 50/30/20** : 50% pour vivre sans angoisse, 30% pour profiter consciemment, 20% pour bâtir ton avenir.
+2. **Construire un fonds d'urgence de 3 mois** : déposer cette somme sur un support garanti et ne jamais y toucher pour des dépenses superflues.
+3. **Développer un High-Income Skill** : consacrer du temps chaque semaine à perfectionner une compétence recherchée (Tech, Design, Rédaction, Vente).
+
+### ⚠️ Piège fatal à éviter absolument
+Le lifestyle inflation (augmenter ses dépenses au même rythme que ses revenus) et l'endettement à la consommation.
+
+### 📋 Mini-plan d'action en 3 étapes dès aujourd'hui
+1. Renseigne ton revenu net dans le simulateur 50/30/20 ci-dessous.
+2. Identifie ta prochaine cible d'épargne de sécurité.
+3. Planifie une session Focus de 25 min pour auditer tes dépenses récurrentes.`,
+
+  "50/30/20": `### 💡 Analyse & Concept clé : La Règle des 50/30/20
+La règle 50/30/20 est le standard universel de l'intelligence financière personnelle :
+- **50% Besoins Vitaux** : logement, nourriture, charges indispensables.
+- **30% Plaisirs Conscients** : sorties, loisirs, passions sans culpabilité.
+- **20% Épargne & Investissement** : d'abord le fonds d'urgence, puis les actifs producteurs de valeur.
+
+### 🚀 Stratégies concrètes à appliquer immédiatement
+1. **Automatiser le virement d'épargne** dès le 1er jour de réception du salaire (se payer en premier).
+2. **Isoler les dépenses vitales** sur un compte ou sous-compte dédié.
+3. **Plafonner les plaisirs** à 30% sans empiéter sur les 20% d'épargne.
+
+### ⚠️ Piège fatal à éviter absolument
+Vouloir commencer par 50% d'épargne d'un coup et abandonner au bout de 2 mois par frustration. La régularité bat l'intensité.
+
+### 📋 Mini-plan d'action en 3 étapes dès aujourd'hui
+1. Calcule tes 3 postes de dépenses du mois dernier.
+2. Ajuste les curseurs dans le simulateur 50/30/20 ci-dessous.
+3. Bloque ton premier virement automatique vers ton épargne.`,
+
+  "gagner": `### 💡 Analyse & Concept clé : Comment Développer ses Revenus
+Augmenter ses revenus repose sur une seule vérité : **créer de la valeur mesurable pour les autres**. En 2026, l'accès aux outils numériques et à l'IA réduit le coût d'entrée à zéro.
+
+### 🚀 Stratégies concrètes pour générer des revenus
+1. **High-Income Skills** : développement web, copywriting, design de conversion, automatisation No-Code, community management.
+2. **Le modèle Service vers Produit** : commence par vendre une compétence sous forme de prestation (sur la marketplace OMNI Service), puis transforme tes process en template ou formation.
+3. **Optimisation du temps libre** : consacrer 5 heures par semaine de Deep Work (via l'onglet Focus) à un side hustle.
+
+### ⚠️ Piège fatal à éviter absolument
+Poursuivre les promesses de "richesse facile et sans effort" (trading risqué, schémas pyramidaux). Le vrai revenu vient de la compétence réelle.
+
+### 📋 Mini-plan d'action en 3 étapes dès aujourd'hui
+1. Identifie 1 problème récurrent que tu sais résoudre pour autrui.
+2. Propose ta première prestation d'aide dans l'onglet OMNI Service.
+3. Bloque 2 sessions Pomodoro de 50 minutes cette semaine pour prospecter.`,
+
+  "erreurs": `### 💡 Analyse & Concept clé : Les Erreurs Financières Fatales
+La plupart des difficultés financières ne viennent pas d'un manque de revenus, mais d'hémorragies de cash évitables :
+
+1. **Le Lifestyle Inflation (dérive du train de vie)** : augmenter ses dépenses au même rythme que ses augmentations de salaire.
+2. **Le Crédit à la Consommation** : payer des intérêts composés sur des objets qui perdent immédiatement leur valeur.
+3. **Absence de Fonds d'Urgence** : être contraint de s'endetter à la moindre tuile (panne, imprévu).
+4. **Achats Impulsifs / Dopamine Shopping** : compenser le stress ou l'ennui par des commandes en ligne.
+
+### 🚀 Stratégies concrètes pour s'en prémunir
+- **Règle des 72 heures** : pour tout achat plaisir non essentiel supérieur à 50 €, attends 3 jours pleins avant de valider.
+- **Fonds de sécurité étanche** : 3 mois de dépenses vitales sur un livret garanti.
+
+### 📋 Mini-plan d'action dès aujourd'hui
+1. Fais l'audit de tes abonnements récurrents et résilie ceux non utilisés depuis 30 jours.
+2. Fixe un montant de fonds d'urgence dans le simulateur ci-dessous.
+3. Supprime les cartes bancaires enregistrées sur les sites marchands impulsifs.`
+};
 
 export function Wallet() {
   const { updateScore } = useAuth();
   const { formatCurrency, getCurrencySymbol } = usePreferences();
+  const { isOffline } = useOffline();
   const location = useLocation();
   const currencySym = getCurrencySymbol();
   const [topic, setTopic] = useState("");
@@ -60,12 +132,19 @@ export function Wallet() {
 
   const monthsToReachGoal = Math.ceil(savingsGoalTarget / savings);
 
-  useEffect(() => {
-    if (location.state?.prefilledTopic) {
-      setTopic(location.state.prefilledTopic);
-      analyzeTopic(location.state.prefilledTopic);
+  const getFallbackAdvice = (q: string): string => {
+    const norm = q.toLowerCase();
+    if (norm.includes("50") || norm.includes("budget") || norm.includes("regle")) {
+      return OFFLINE_TOPIC_ADVICE["50/30/20"];
     }
-  }, [location.state]);
+    if (norm.includes("gagner") || norm.includes("hustle") || norm.includes("revenu") || norm.includes("competence")) {
+      return OFFLINE_TOPIC_ADVICE["gagner"];
+    }
+    if (norm.includes("erreur") || norm.includes("piege") || norm.includes("dette") || norm.includes("fuir")) {
+      return OFFLINE_TOPIC_ADVICE["erreurs"];
+    }
+    return OFFLINE_TOPIC_ADVICE.default;
+  };
 
   const analyzeTopic = async (customTopic?: string) => {
     const q = customTopic || topic;
@@ -74,6 +153,20 @@ export function Wallet() {
     setAdvice("");
     sound.playClick();
     vibrate(30);
+
+    if (isOffline) {
+      setTimeout(() => {
+        setAdvice(getFallbackAdvice(q));
+        sound.playComplete();
+        vibrate(40);
+        if (!scoreRewarded) {
+          updateScore(10);
+          setScoreRewarded(true);
+        }
+        setIsGenerating(false);
+      }, 350);
+      return;
+    }
     
     try {
       const res = await fetch("/api/gemini/mentor", {
@@ -81,8 +174,10 @@ export function Wallet() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ topic: q }),
       });
+      if (!res.ok) throw new Error("Status " + res.status);
       const data = await res.json();
-      setAdvice(data.advice || "Conseil généré par le Mentor IA.");
+      const resultAdvice = data.advice || getFallbackAdvice(q);
+      setAdvice(resultAdvice);
       sound.playComplete();
       vibrate(50);
 
@@ -92,8 +187,14 @@ export function Wallet() {
         setScoreRewarded(true);
       }
     } catch (error) {
-      console.error(error);
-      setAdvice("Une erreur est survenue lors de la communication avec le Mentor IA. Vérifie ta connexion et réessaie. 🛠️");
+      // Graceful offline fallback: Never leave the user with an error
+      setAdvice(getFallbackAdvice(q));
+      sound.playComplete();
+      vibrate(40);
+      if (!scoreRewarded) {
+        updateScore(10);
+        setScoreRewarded(true);
+      }
     } finally {
       setIsGenerating(false);
     }

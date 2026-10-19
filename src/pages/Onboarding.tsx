@@ -1,14 +1,30 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Hexagon, Mail, Lock, Phone, ArrowRight, ShieldCheck, Sparkles, CheckCircle2, Eye, EyeOff } from "lucide-react";
+import { 
+  Hexagon, 
+  Mail, 
+  Lock, 
+  Phone, 
+  ArrowRight, 
+  ShieldCheck, 
+  Sparkles, 
+  Eye, 
+  EyeOff, 
+  Globe, 
+  Check 
+} from "lucide-react";
 import { vibrate } from "../lib/utils";
 import { sound } from "../lib/sound";
 import { useAuth } from "../context/AuthContext";
+import { usePreferences, LANGUAGES, LanguageCode } from "../context/PreferencesContext";
+import { CountryCodePicker } from "../components/CountryCodePicker";
 import { ALL_COUNTRIES } from "../data/internationalData";
 
 export function Onboarding({ onComplete }: { onComplete: () => void }) {
-  const { setDirectCredentials, signInWithGoogle } = useAuth();
+  const { setDirectCredentials, signInWithGoogle, signUpWithEmail, signInWithEmail } = useAuth();
+  const { t, language, setLanguage } = usePreferences();
   const [showSplash, setShowSplash] = useState(true);
+  const [showLanguagePicker, setShowLanguagePicker] = useState(false);
   
   // Form fields
   const [email, setEmail] = useState("");
@@ -37,42 +53,82 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
     return () => clearTimeout(timer);
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const getLocalizedError = (type: "email" | "password" | "phone") => {
+    if (type === "email") {
+      if (language === "fr") return "Veuillez saisir une adresse email valide.";
+      if (language === "es") return "Por favor, introduce un correo electrónico válido.";
+      if (language === "de") return "Bitte geben Sie eine gültige E-Mail-Adresse ein.";
+      if (language === "ar") return "يرجى إدخال عنوان بريد إلكتروني صالح.";
+      return "Please enter a valid email address.";
+    }
+    if (type === "password") {
+      if (language === "fr") return "Le mot de passe doit contenir au moins 6 caractères.";
+      if (language === "es") return "La contraseña debe tener al menos 6 caracteres.";
+      if (language === "de") return "Das Passwort muss mindestens 6 Zeichen lang sein.";
+      if (language === "ar") return "يجب أن تتكون كلمة المرور من 6 أحرف على الأقل.";
+      return "Password must be at least 6 characters long.";
+    }
+    if (type === "phone") {
+      if (language === "fr") return "Veuillez saisir un numéro de téléphone valide.";
+      if (language === "es") return "Por favor, introduce un número de teléfono válido.";
+      if (language === "de") return "Bitte geben Sie eine gültige Telefonnummer ein.";
+      if (language === "ar") return "يرجى إدخال رقم هاتف صالح.";
+      return "Please enter a valid phone number.";
+    }
+    return "Error";
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
     // Validation
     if (!email.trim() || !email.includes("@")) {
-      setError("Veuillez saisir une adresse email valide.");
+      setError(getLocalizedError("email"));
       vibrate(100);
       return;
     }
 
     if (!password || password.length < 6) {
-      setError("Le mot de passe doit contenir au moins 6 caractères.");
+      setError(getLocalizedError("password"));
       vibrate(100);
       return;
     }
 
-    if (!phone.trim() || phone.replace(/\D/g, "").length < 8) {
-      setError("Veuillez saisir un numéro de téléphone valide.");
+    if (!phone.trim() || phone.replace(/\D/g, "").length < 6) {
+      setError(getLocalizedError("phone"));
       vibrate(100);
       return;
     }
 
     setIsSubmitting(true);
     vibrate([40, 60, 40]);
-    sound.playSuccess();
 
     const fullPhone = phone.trim().startsWith("+") ? phone.trim() : `${dialCode} ${phone.trim()}`;
 
-    // Persist direct credentials
+    // Always persist credentials locally
     setDirectCredentials({
       email: email.trim(),
       phone: fullPhone,
       password: password
     });
 
+    // Sync with Firebase Authentication & Firestore
+    try {
+      try {
+        await signUpWithEmail(email.trim(), password, fullPhone);
+      } catch (signupErr: any) {
+        if (signupErr?.code === "auth/email-already-in-use") {
+          await signInWithEmail(email.trim(), password);
+        } else {
+          console.warn("Firebase Auth notice:", signupErr?.message);
+        }
+      }
+    } catch (firebaseErr: any) {
+      console.warn("Firebase connection notice (proceeding with local auth):", firebaseErr?.message);
+    }
+
+    sound.playSuccess();
     setTimeout(() => {
       onComplete();
     }, 400);
@@ -82,14 +138,14 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
     try {
       vibrate(30);
       sound.playClick();
-      const token = await signInWithGoogle();
-      if (token || true) {
-        onComplete();
-      }
+      await signInWithGoogle();
+      onComplete();
     } catch (e) {
       console.warn("Google sign in skipped or cancelled", e);
     }
   };
+
+  const currentLangObj = LANGUAGES.find((l) => l.code === language) || LANGUAGES[0];
 
   if (showSplash) {
     return (
@@ -130,22 +186,91 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-[#050505] flex flex-col justify-between z-40 overflow-y-auto px-6 py-8 safe-area-padding">
+    <div className="fixed inset-0 bg-[#050505] flex flex-col justify-between z-40 overflow-y-auto px-6 py-6 safe-area-padding">
       {/* Background ambient lighting */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.18),transparent_50%)] pointer-events-none" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom,rgba(168,85,247,0.12),transparent_50%)] pointer-events-none" />
 
-      {/* Header Branding */}
-      <div className="relative z-10 flex flex-col items-center text-center pt-2">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-mono uppercase tracking-widest mb-3">
+      {/* Top Bar with Language Selector */}
+      <div className="relative z-20 flex items-center justify-between w-full max-w-sm mx-auto pt-1">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-mono uppercase tracking-widest">
           <Sparkles className="w-3.5 h-3.5" />
-          <span>Première Connexion Requise</span>
+          <span>{language === "fr" ? "Inscription Rapide" : "Fast Signup"}</span>
         </div>
+
+        {/* Language Switcher Button */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => {
+              vibrate(15);
+              setShowLanguagePicker(!showLanguagePicker);
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/15 text-xs font-mono text-white/90 transition-colors cursor-pointer shadow-sm"
+          >
+            <Globe className="w-3.5 h-3.5 text-indigo-400" />
+            <span>{currentLangObj.flag} {currentLangObj.code.toUpperCase()}</span>
+          </button>
+
+          {/* Language Dropdown Menu */}
+          <AnimatePresence>
+            {showLanguagePicker && (
+              <>
+                <div
+                  className="fixed inset-0 z-30"
+                  onClick={() => setShowLanguagePicker(false)}
+                />
+                <motion.div
+                  initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                  className="absolute right-0 mt-2 w-48 max-h-72 overflow-y-auto bg-[#0d0e17] border border-white/15 rounded-2xl p-1.5 shadow-2xl z-40 custom-scrollbar"
+                >
+                  <p className="text-[10px] font-mono text-white/40 uppercase tracking-wider px-3 py-1.5 border-b border-white/10">
+                    {language === "fr" ? "Choisir la langue" : "Select language"}
+                  </p>
+                  {LANGUAGES.map((l) => (
+                    <button
+                      key={l.code}
+                      type="button"
+                      onClick={() => {
+                        vibrate(20);
+                        sound.playClick();
+                        setLanguage(l.code as LanguageCode);
+                        setShowLanguagePicker(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-colors ${
+                        language === l.code
+                          ? "bg-indigo-600/20 text-indigo-300 font-medium border border-indigo-500/30"
+                          : "text-white/70 hover:bg-white/5 hover:text-white"
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <span>{l.flag}</span>
+                        <span>{l.native}</span>
+                      </span>
+                      {language === l.code && <Check className="w-3.5 h-3.5 text-indigo-400" />}
+                    </button>
+                  ))}
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+
+      {/* Header Branding */}
+      <div className="relative z-10 flex flex-col items-center text-center pt-3">
         <h2 className="text-2xl sm:text-3xl font-light text-white tracking-tight">
-          Bienvenue sur <span className="font-medium bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">OMNI</span>
+          {t.onboarding.welcome}{" "}
+          <span className="font-medium bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+            OMNI
+          </span>
         </h2>
         <p className="text-xs text-white/50 max-w-xs mt-1.5 leading-relaxed font-light">
-          Renseigne tes identifiants pour initialiser ton environnement et synchroniser ton profil mobile.
+          {language === "fr" 
+            ? "Renseigne tes identifiants pour initialiser ton environnement et synchroniser ton profil mobile."
+            : "Enter your credentials to initialize your environment and sync your global profile."}
         </p>
       </div>
 
@@ -154,9 +279,9 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
-        className="relative z-10 w-full max-w-sm mx-auto my-auto py-4"
+        className="relative z-10 w-full max-w-sm mx-auto my-auto py-3"
       >
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-3.5">
           {error && (
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }}
@@ -171,7 +296,7 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
           <div className="space-y-1.5">
             <label className="text-[11px] font-mono uppercase tracking-wider text-white/60 flex items-center gap-1.5">
               <Mail className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Adresse Email</span>
+              <span>{t.onboarding.emailLabel}</span>
             </label>
             <div className="relative">
               <input 
@@ -179,7 +304,7 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="nom@exemple.com"
+                placeholder="name@example.com"
                 className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 px-4 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-indigo-500 transition-colors"
               />
             </div>
@@ -189,7 +314,7 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
           <div className="space-y-1.5">
             <label className="text-[11px] font-mono uppercase tracking-wider text-white/60 flex items-center gap-1.5">
               <Lock className="w-3.5 h-3.5 text-purple-400" />
-              <span>Mot de passe</span>
+              <span>{t.onboarding.passwordLabel}</span>
             </label>
             <div className="relative">
               <input 
@@ -197,7 +322,7 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="6 caractères minimum"
+                placeholder={t.onboarding.passwordPlaceholder}
                 className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 px-4 pr-11 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-purple-500 transition-colors"
               />
               <button
@@ -210,60 +335,25 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
             </div>
           </div>
 
-          {/* Numéro de téléphone avec Indicatif Mondial */}
+          {/* Numéro de téléphone avec Indicatif Mondial Searchable */}
           <div className="space-y-1.5">
             <label className="text-[11px] font-mono uppercase tracking-wider text-white/60 flex items-center justify-between">
               <span className="flex items-center gap-1.5">
                 <Phone className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Numéro de Téléphone</span>
+                <span>{t.onboarding.phoneLabel}</span>
               </span>
               <span className="text-[10px] text-emerald-400/80 font-mono">
                 {ALL_COUNTRIES.find(c => c.dialCode === dialCode)?.flag} {dialCode}
               </span>
             </label>
-            <div className="flex gap-2">
-              {/* Sélecteur d'indicatif mondial */}
-              <select
+
+            <div className="flex gap-2 items-center">
+              {/* Searchable Country Code Selector Dropdown */}
+              <CountryCodePicker
                 value={dialCode}
-                onChange={(e) => {
-                  vibrate(15);
-                  setDialCode(e.target.value);
-                }}
-                className="bg-black/60 border border-white/10 rounded-2xl py-3 px-3 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono w-28 shrink-0 transition-colors"
-              >
-                <option value="+1">🇺🇸/🇨🇦 +1</option>
-                <option value="+44">🇬🇧 +44</option>
-                <option value="+33">🇫🇷 +33</option>
-                <option value="+32">🇧🇪 +32</option>
-                <option value="+41">🇨🇭 +41</option>
-                <option value="+49">🇩🇪 +49</option>
-                <option value="+34">🇪🇸 +34</option>
-                <option value="+39">🇮🇹 +39</option>
-                <option value="+351">🇵🇹 +351</option>
-                <option value="+212">🇲🇦 +212</option>
-                <option value="+213">🇩🇿 +213</option>
-                <option value="+216">🇹🇳 +216</option>
-                <option value="+221">🇸🇳 +221</option>
-                <option value="+225">🇨🇮 +225</option>
-                <option value="+237">🇨🇲 +237</option>
-                <option value="+243">🇨🇩 +243</option>
-                <option value="+971">🇦🇪 +971</option>
-                <option value="+966">🇸🇦 +966</option>
-                <option value="+974">🇶🇦 +974</option>
-                <option value="+20">🇪🇬 +20</option>
-                <option value="+90">🇹🇷 +90</option>
-                <option value="+55">🇧🇷 +55</option>
-                <option value="+52">🇲🇽 +52</option>
-                <option value="+61">🇦🇺 +61</option>
-                <option value="+81">🇯🇵 +81</option>
-                <option value="+86">🇨🇳 +86</option>
-                <option value="+91">🇮🇳 +91</option>
-                {ALL_COUNTRIES.filter(c => c.dialCode && !["+1", "+44", "+33", "+32", "+41", "+49", "+34", "+39", "+351", "+212", "+213", "+216", "+221", "+225", "+237", "+243", "+971", "+966", "+974", "+20", "+90", "+55", "+52", "+61", "+81", "+86", "+91"].includes(c.dialCode)).map(c => (
-                  <option key={`${c.code}-${c.dialCode}`} value={c.dialCode}>
-                    {c.flag} {c.dialCode} ({c.name})
-                  </option>
-                ))}
-              </select>
+                onChange={(code) => setDialCode(code)}
+                searchPlaceholder={t.onboarding.searchCountry}
+              />
 
               {/* Champ numéro libre sans préfixe forcé */}
               <input 
@@ -271,7 +361,7 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
                 required
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                placeholder="612345678"
+                placeholder="123 456 789"
                 className="flex-1 bg-white/5 border border-white/10 rounded-2xl py-3 px-4 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-emerald-500 transition-colors font-mono"
               />
             </div>
@@ -284,17 +374,17 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
             disabled={isSubmitting}
             className="w-full mt-2 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:to-pink-500 text-white font-medium text-sm flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(99,102,241,0.35)] transition-all cursor-pointer"
           >
-            <span>Valider et Accéder à OMNI</span>
+            <span>{t.onboarding.submitBtn}</span>
             <ArrowRight className="w-4 h-4" />
           </motion.button>
         </form>
 
         {/* Alternative Google Sign In */}
-        <div className="mt-5 text-center">
+        <div className="mt-4 text-center">
           <div className="relative flex items-center justify-center mb-3">
             <div className="border-t border-white/10 w-full absolute" />
             <span className="bg-[#050505] px-3 text-[10px] font-mono text-white/30 uppercase tracking-widest relative z-10">
-              Ou connexion rapide
+              {t.onboarding.orQuickGoogle}
             </span>
           </div>
 
@@ -303,15 +393,15 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
             onClick={handleGoogleQuick}
             className="w-full py-2.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white text-xs font-medium transition-all flex items-center justify-center gap-2"
           >
-            <span>Continuer avec Google Firebase</span>
+            <span>{t.onboarding.quickGoogleBtn}</span>
           </button>
         </div>
       </motion.div>
 
       {/* Footer Trust Indicator */}
-      <div className="relative z-10 flex items-center justify-center gap-2 text-[11px] text-white/30 font-mono pt-4">
+      <div className="relative z-10 flex items-center justify-center gap-2 text-[11px] text-white/30 font-mono pt-2">
         <ShieldCheck className="w-3.5 h-3.5 text-emerald-400/70" />
-        <span>Chiffrement AES • Stockage Sécurisé WebIntoApp</span>
+        <span>{language === "fr" ? "Chiffrement AES • Stockage Sécurisé WebIntoApp" : "AES Encryption • WebIntoApp Secure Storage"}</span>
       </div>
     </div>
   );

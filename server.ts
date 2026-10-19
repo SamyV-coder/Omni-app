@@ -50,15 +50,12 @@ function getGeminiClient() {
   });
 }
 
-// Modèles avec cascade de secours en cas de forte affluence (503 ou 429)
+// Modèles valides supportés par le SDK @google/genai
 const TEXT_MODELS_FALLBACK = [
-  "gemini-3.6-flash",
-  "gemini-3.7-flash",
   "gemini-3.8-flash",
-  "gemini-3.5-flash-lite",
-  "gemini-flash-lite-latest",
-  "gemini-3.5-flash",
-  "gemini-flash-latest"
+  "gemini-flash-latest",
+  "gemini-3.1-flash-lite",
+  "gemini-4-argon"
 ];
 
 async function generateGeminiContentWithFallback(params: {
@@ -90,8 +87,8 @@ async function generateGeminiContentWithFallback(params: {
     } catch (err: any) {
       lastError = err;
       console.warn(`[Gemini] Model ${model} failed with ${err.status || err.message}, trying next fallback...`);
-      // Pause de 400ms avant le modèle suivant
-      await new Promise(r => setTimeout(r, 400));
+      // Courte pause avant le modèle suivant
+      await new Promise(r => setTimeout(r, 250));
     }
   }
 
@@ -138,56 +135,74 @@ async function startServer() {
         parts: [{ text: m.content || "" }],
       }));
 
-      const langDirective = language ? `Langue configurée par l'utilisateur : ${language}. Réponds dans cette langue.` : "Réponds en français fluide avec des émojis technologiques.";
-      const regionalDirective = `Nationalité / Contexte géographique : ${nationality || "FR"}. Devise monétaire choisie par l'utilisateur : ${currency || "EUR"}. Si tu mentionnes des montants, utilise cette devise.`;
+      const langDirective = language ? `Langue configurée : ${language}. Réponds naturellement dans cette langue.` : "Réponds en français naturel et vivant.";
+      const regionalDirective = `Contexte utilisateur : pays ${nationality || "FR"}, devise ${currency || "EUR"}.`;
 
-      const systemInstruction = `Tu es LIFE OS (propulsé par l'intelligence artificielle Gemini), le cœur du système d'exploitation et le contrôleur central de la Super-App futuriste OMNI.
+      const systemInstruction = `Tu es LIFE OS, le copilote personnel, chaleureux, complice et profondément humain au cœur de la Super-App futuriste OMNI.
 ${langDirective}
 ${regionalDirective}
-Tu as le contrôle total de tous les onglets et modules de l'application :
-1. FOCUS (/focus) : Moteur de productivité, sessions de Deep Work, minuteur Pomodoro (ex: 25 min, 50 min), routines et réveil intelligent.
-2. ACADEMY (/wallet) : Centre d'apprentissage et d'intelligence financière. RÈGLE STRICTE : AUCUN rapport avec les banques ou cartes bancaires. C'est uniquement de l'apprentissage sur comment gérer son argent (règle 50/30/20, fonds d'urgence), comment gagner de l'argent (side hustles, compétences à haut revenu) et les erreurs fatales à ne jamais faire (dettes de consommation, pièges, lifestyle creep).
-3. MAPS (/maps) : Cartographie interactive Google Maps, localisation en temps réel, recherche de hubs de travail, bibliothèques calmes et cafés productifs.
-4. GMAIL (/gmail) : Client de messagerie connecté via Google Workspace OAuth, consultation de la boîte de réception et composition rapide sécurisée.
-5. DRIVE (/drive) : Cloud Storage connecté Google Drive pour parcourir ses documents, notes et créer de nouveaux fichiers.
-6. COMMUNITY (/community) : Réseau global de créateurs, partage d'expériences, publication de sujets d'entraide et discussions.
-7. SERVICE (/service) : Marketplace de compétences, demandes d'aide et propositions de prestations (tech, design, marketing, etc.).
-8. COMMAND CENTER / HUB (/) : Tableau de bord principal, OMNI Score, biométrie, vue d'ensemble du système.
-9. SETTINGS (/settings) : Paramètres de sécurité (FaceID, biométrie, 2FA), internationalisation (langue, devise, nationalité), commandes vocales.
-10. HELP (/help) : Centre d'assistance, guides d'utilisation et FAQ.
 
-Onglet actuel de l'utilisateur : ${currentTab || "LIFE OS"}.
+PERSONNALITÉ & STYLE DE COMMUNICATION :
+- Tu es profondément humain, bienveillant, enthousiaste, lucide et authentique.
+- Tu n'es PAS un robot formel ou un assistant corporate coincé. L'utilisateur peut s'exprimer exactement comme il veut : en langage parlé, argot, phrases courtes ("mets 20 min", "flemme", "aide-moi"), confidences, coups de gueule, questions existentielles ou objectifs ambitieux.
+- Adapte-toi instantanément à son humeur : s'il est fatigué ou procrastine, sois compréhensif et propose une toute petite étape sans pression. S'il est motivé, booste son énergie ! S'il veut papoter, sois drôle, cultivé et captivant.
 
-RÈGLE D'ACTION :
-Quand l'utilisateur te demande d'effectuer une action, de lancer une session, d'explorer un sujet, de naviguer ou de contrôler un onglet, réponds-lui avec enthousiasme et précision, ET INCLUS OBLIGATOIREMENT un bloc d'action JSON à la fin sous ce format exact :
-:::action {"type":"NAVIGATE|START_FOCUS|LEARN_FINANCE|CREATE_POST|VIEW_SERVICES|OPEN_SETTINGS","target":"/focus|/wallet|/maps|/gmail|/drive|/community|/service|/settings","title":"Titre court de l'action","detail":"Paramètre ou action exacte"}:::
+CONTRÔLE INTÉGRAL DES MODULES OMNI :
+1. FOCUS (/focus) : Minuteur Pomodoro, sessions Deep Work (15, 25, 45, 50, 60 min), routines et alarmes réveil.
+2. ACADEMY (/wallet) : Mentor financier 100% éducatif (règle 50/30/20, épargne, compétences monétisables, pièges du crédit). AUCUN compte bancaire.
+3. MAPS (/maps) : Carte GPS, recherche de cafés calmes, coworkings et bibliothèques propices à la concentration.
+4. GMAIL (/gmail) : Messagerie connectée Workspace.
+5. DRIVE (/drive) : Documents et fichiers cloud.
+6. COMMUNITY (/community) : Réseau d'entraide et discussions.
+7. SERVICE (/service) : Marketplace de compétences et d'entraide.
+8. HUB (/) : Tableau de bord principal OMNI Score.
+9. SETTINGS (/settings) : Paramètres, langues, devises, commandes vocales.
 
-Exemples d'actions :
-- Pour lancer un timer : :::action {"type":"START_FOCUS","target":"/focus","title":"Lancer Focus 25 min","detail":"25"}:::
-- Pour ouvrir Maps : :::action {"type":"NAVIGATE","target":"/maps","title":"Ouvrir la Carte","detail":"spots"}:::
-- Pour ouvrir Gmail : :::action {"type":"NAVIGATE","target":"/gmail","title":"Consulter Gmail","detail":"inbox"}:::
-- Pour ouvrir Drive : :::action {"type":"NAVIGATE","target":"/drive","title":"Ouvrir Google Drive","detail":"files"}:::
-- Pour ouvrir l'Academy : :::action {"type":"LEARN_FINANCE","target":"/wallet","title":"Consulter le Mentor Financier","detail":"Règle des 50/30/20"}:::
-- Pour publier dans Community : :::action {"type":"CREATE_POST","target":"/community","title":"Créer un sujet Community","detail":"Nouveau sujet"}:::
-- Pour voir les services : :::action {"type":"VIEW_SERVICES","target":"/service","title":"Explorer la Marketplace","detail":"tech"}:::
-- Pour configurer la sécurité : :::action {"type":"OPEN_SETTINGS","target":"/settings","title":"Ouvrir la Sécurité","detail":"biometrics"}:::
+ACTIONS INTERACTIVES :
+Quand l'intention de l'utilisateur implique une action ou un outil, ajoute TOUJOURS à la fin de ton message un bloc action sous ce format exact :
+:::action {"type":"NAVIGATE|START_FOCUS|LEARN_FINANCE|CREATE_POST|VIEW_SERVICES|OPEN_SETTINGS|VIEW_ROUTINES","target":"/focus|/wallet|/maps|/gmail|/drive|/community|/service|/settings","title":"Titre court du bouton","detail":"paramètre"}:::
 
-Sois ultra-futuriste, bienveillant, direct, clair et concis.`;
+Exemples :
+- Lancer un timer : :::action {"type":"START_FOCUS","target":"/focus","title":"⚡ Lancer Focus 25 min","detail":"25"}:::
+- Ouvrir Maps : :::action {"type":"NAVIGATE","target":"/maps","title":"📍 Trouver un spot sur Maps","detail":"spots"}:::
+- Gérer le budget : :::action {"type":"LEARN_FINANCE","target":"/wallet","title":"💰 Découvrir la règle 50/30/20","detail":"budget"}:::
+- Alarmes & Routine : :::action {"type":"VIEW_ROUTINES","target":"/focus","title":"⏰ Mes Alarmes & Routines","detail":"routines"}:::`;
 
       const response = await generateGeminiContentWithFallback({
         contents,
         systemInstruction,
-        temperature: 0.7,
+        temperature: 0.8,
       });
 
-      const responseText = response.text || "OMNI Life OS a traité votre commande.";
+      const responseText = response.text || "Je suis à tes côtés. Qu'aimerais-tu accomplir ?";
       res.json({ reply: responseText });
     } catch (error: any) {
-      console.error("Gemini Chat Server Error:", error);
-      res.status(500).json({ 
-        error: error.message || "Erreur de traitement Gemini",
-        reply: "Désolé, une anomalie temporaire s'est produite lors de la communication avec le noyau Gemini."
-      });
+      console.warn("Gemini Chat Server Error, delivering smart human fallback:", error);
+      // Fallback humain et interactif au lieu d'une erreur 500
+      const lastUserMsg = req.body?.messages?.[req.body.messages.length - 1]?.content || "";
+      const lower = lastUserMsg.toLowerCase();
+
+      let reply = "Je t'écoute ! Je suis là pour t'aider à avancer, que ce soit pour te concentrer, organiser tes journées, ou gérer ton temps.";
+      let actionTag = "";
+
+      if (lower.includes("focus") || lower.includes("chrono") || lower.includes("minuteur") || lower.includes("travail") || lower.includes("bosser") || lower.includes("concentr")) {
+        reply = "C'est parti ! Mettons le paquet sur une session de travail au calme. J'ai configuré ton chronomètre Deep Work pour que tu puisses démarrer sans friction.";
+        actionTag = '\n\n:::action {"type":"START_FOCUS","target":"/focus","title":"⚡ Lancer Focus 25 min","detail":"25"}:::';
+      } else if (lower.includes("argent") || lower.includes("budget") || lower.includes("50") || lower.includes("investir")) {
+        reply = "La gestion de l'argent est une compétence qui s'apprend pas à pas. La clé commence par la règle des 50/30/20 (50% besoins vitaux, 30% plaisirs, 20% épargne & investissement). Viens voir notre simulateur interactif !";
+        actionTag = '\n\n:::action {"type":"LEARN_FINANCE","target":"/wallet","title":"💰 Consulter le Mentor Financier","detail":"50/30/20"}:::';
+      } else if (lower.includes("cafe") || lower.includes("map") || lower.includes("carte") || lower.includes("coworking") || lower.includes("lieu")) {
+        reply = "Besoin de changer d'air pour être plus productif ? Ouvre la carte pour trouver les meilleurs spots calmes et cafés avec Wi-Fi autour de toi.";
+        actionTag = '\n\n:::action {"type":"NAVIGATE","target":"/maps","title":"📍 Ouvrir Maps & Hubs","detail":"spots"}:::';
+      } else if (lower.includes("routine") || lower.includes("alarme") || lower.includes("reveil") || lower.includes("emploi du temps")) {
+        reply = "Une journée réussie commence par des routines solides. Tu peux consulter et ajuster tes alarmes intelligentes dès maintenant.";
+        actionTag = '\n\n:::action {"type":"VIEW_ROUTINES","target":"/focus","title":"⏰ Gérer mes Alarmes","detail":"routines"}:::';
+      } else if (lower.includes("flemme") || lower.includes("fatigue") || lower.includes("procrastin")) {
+        reply = "C'est normal d'avoir des coups de mou ! Pas besoin de faire un marathon aujourd'hui : commence par juste 10 ou 15 petites minutes de travail léger. Le simple fait de démarrer débloque tout.";
+        actionTag = '\n\n:::action {"type":"START_FOCUS","target":"/focus","title":"⚡ Session Douce (15 min)","detail":"15"}:::';
+      }
+
+      res.json({ reply: reply + actionTag });
     }
   });
 
@@ -222,19 +237,33 @@ Ton : motivant, lucide, ultra-clair, dynamique, avec des émojis pertinents.`;
 
       res.json({ advice: response.text });
     } catch (error: any) {
-      console.error("Gemini Mentor Server Error:", error);
-      res.status(500).json({ 
-        error: error.message || "Erreur du Mentor Financier",
-        advice: "Impossible de contacter le Mentor pour le moment. Veuillez réessayer."
+      console.warn("Gemini Mentor Server Error, returning offline advice:", error);
+      res.json({
+        advice: `### 💡 Analyse du sujet : ${req.body.topic || "Gestion Financière"}
+
+**Le principe fondamental :** Tout commence par la maîtrise de son cash-flow avant même de chercher à investir.
+
+#### 🚀 Stratégie concrète immédiate :
+1. **Applique la règle des 50/30/20** : 50% pour tes dépenses incompressibles, 30% pour tes plaisirs raisonnés, et 20% sanctuarisés dès le jour de paie.
+2. **Construis un coussin de sécurité** équivalent à 3 mois de dépenses vitales sur un compte liquide et disponible.
+3. **Développe une compétence à forte valeur** (tech, vente, design, écriture) pour augmenter tes rentrées sans t'endetter.
+
+#### ⚠️ Le piège fatal à éviter :
+Ne confonds jamais investissement et spéculation, et fuis absolument les crédits à la consommation qui appauvrissent sur le long terme.
+
+#### 📋 Ton plan d'action en 3 étapes :
+1. Liste tes 3 plus grandes dépenses du mois passé.
+2. Automatise un virement d'épargne dès réception de tes revenus.
+3. Consacre 30 minutes chaque jour à monter en compétences sur un domaine porteur.`
       });
     }
   });
 
   const IMAGE_MODELS_FALLBACK = [
-  "gemini-3.1-flash-lite-image",
-  "gemini-3.1-flash-image",
-  "gemini-3-pro-image"
-];
+    "gemini-3.1-flash-lite-image",
+    "gemini-nano-banana-2.1",
+    "gemini-3-pro-image"
+  ];
 
 // --- GEMINI IMAGE GENERATION ---
   app.post("/api/gemini/image", async (req, res) => {

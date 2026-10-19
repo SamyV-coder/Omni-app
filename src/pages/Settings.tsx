@@ -28,13 +28,16 @@ import {
   MapPin,
   Mail,
   HardDrive,
-  ExternalLink
+  ExternalLink,
+  Wifi,
+  WifiOff
 } from "lucide-react";
 import { motion } from "motion/react";
 import { Link } from "react-router-dom";
 import { cn, vibrate } from "../lib/utils";
 import { sound } from "../lib/sound";
 import { useAuth } from "../context/AuthContext";
+import { useOffline } from "../context/OfflineContext";
 import { 
   usePreferences, 
   LANGUAGES, 
@@ -88,11 +91,12 @@ export function Settings() {
     unitSystem, 
     setUnitSystem,
     timezone,
-    setTimezone
+    setTimezone,
+    t
   } = usePreferences();
+  const { isOffline, forceOffline, toggleForceOffline } = useOffline();
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
-  const [biometrics, setBiometrics] = useState(true);
   const [aiAnalysis, setAiAnalysis] = useState(true);
   const [notifications, setNotifications] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -186,7 +190,6 @@ export function Settings() {
         if (data) {
           setUsername(data.username || user?.displayName || directUser?.displayName || "");
           setEmail(data.email || user?.email || directUser?.email || "");
-          setBiometrics(data.biometrics !== undefined ? Boolean(data.biometrics) : true);
           setAiAnalysis(data.aiAnalysis !== undefined ? Boolean(data.aiAnalysis) : true);
           setNotifications(Boolean(data.notifications));
         }
@@ -211,7 +214,6 @@ export function Settings() {
 
   const handleToggle = (key: string, value: boolean) => {
     vibrate(20);
-    if (key === "biometrics") setBiometrics(value);
     if (key === "aiAnalysis") setAiAnalysis(value);
     if (key === "notifications") setNotifications(value);
     saveSettings({ [key]: value });
@@ -240,8 +242,8 @@ export function Settings() {
           <ChevronLeft className="w-6 h-6 text-white/70" />
         </Link>
         <div>
-          <h1 className="text-3xl font-light tracking-tight text-white/90">Paramètres Système</h1>
-          <p className="text-white/50 mt-1 text-sm">Configuration de ton écosystème OMNI & Gemini.</p>
+          <h1 className="text-3xl font-light tracking-tight text-white/90">{t.settings.title}</h1>
+          <p className="text-white/50 mt-1 text-sm">{t.settings.subtitle}</p>
         </div>
       </header>
 
@@ -254,12 +256,12 @@ export function Settings() {
                 <Link2 className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-lg font-medium tracking-wide text-white">Services Google Workspace & Outils</h2>
-                <p className="text-xs text-white/50">Accède directement à tes outils connectés sans encombrer la barre mobile</p>
+                <h2 className="text-lg font-medium tracking-wide text-white">{t.settings.services}</h2>
+                <p className="text-xs text-white/50">Google Maps, Gmail, Drive & Tools</p>
               </div>
             </div>
             <span className="text-[10px] font-mono uppercase bg-blue-500/10 text-blue-300 px-2.5 py-1 rounded-full border border-blue-500/20">
-              Intégrations 1P
+              Workspace 1P
             </span>
           </div>
 
@@ -317,22 +319,79 @@ export function Settings() {
           </div>
         </section>
 
+        {/* Mode Hors-Ligne & Résilience 100% Autonome */}
+        <section className="rounded-3xl bg-white/5 border border-white/10 overflow-hidden backdrop-blur-md">
+          <div className="p-6 border-b border-white/10 flex items-center justify-between bg-white/[0.02]">
+            <div className="flex items-center gap-3">
+              <div className={`p-2.5 rounded-xl border ${isOffline ? "bg-amber-500/10 text-amber-400 border-amber-500/30" : "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"}`}>
+                {isOffline ? <WifiOff className="w-5 h-5" /> : <Wifi className="w-5 h-5" />}
+              </div>
+              <div>
+                <h2 className="text-lg font-medium tracking-wide text-white">Mode Hors-Ligne & Cache Local</h2>
+                <p className="text-xs text-white/50">Fonctionnement 100% autonome sans connexion internet</p>
+              </div>
+            </div>
+            <span className={`text-[10px] font-mono uppercase px-2.5 py-1 rounded-full border ${isOffline ? "bg-amber-500/15 text-amber-300 border-amber-500/30" : "bg-emerald-500/10 text-emerald-300 border-emerald-500/20"}`}>
+              {isOffline ? "Hors-Ligne Actif" : "En Ligne"}
+            </span>
+          </div>
+
+          <div className="p-6 space-y-4">
+            <div className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-white/[0.03] border border-white/10">
+              <div>
+                <p className="text-sm font-medium text-white">Forcer le Mode Hors-Ligne</p>
+                <p className="text-xs text-white/50 mt-0.5">
+                  Désactive les requêtes réseau pour tester l'autonomie complète (GPS Radar, Pomodoro, Alarmes, Simulateur Budget & IA Locale).
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={toggleForceOffline}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  forceOffline ? "bg-amber-500" : "bg-white/20"
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                    forceOffline ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+              <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/5">
+                <span className="text-[10px] font-mono text-indigo-400 uppercase tracking-widest block mb-1">GPS & Radar</span>
+                <p className="text-xs text-white/70">Coordonnées GPS et hubs de travail opérationnels sans réseau</p>
+              </div>
+              <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/5">
+                <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest block mb-1">Focus & Alarmes</span>
+                <p className="text-xs text-white/70">Minuteurs et réveils 100% exécutés dans l'appareil</p>
+              </div>
+              <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/5">
+                <span className="text-[10px] font-mono text-purple-400 uppercase tracking-widest block mb-1">Life OS Local</span>
+                <p className="text-xs text-white/70">Moteur de commandes humaines autonome sans serveur</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* Profil & Identité Firebase */}
         <section className="rounded-3xl bg-white/5 border border-white/10 overflow-hidden backdrop-blur-md">
           <div className="p-6 border-b border-white/10 flex items-center justify-between bg-white/[0.02]">
             <div className="flex items-center gap-3">
               <User className="w-5 h-5 text-indigo-400" />
-              <h2 className="text-lg font-medium tracking-wide">Profil & Authentification Firebase</h2>
+              <h2 className="text-lg font-medium tracking-wide">{t.settings.account}</h2>
             </div>
             {user ? (
               <span className="text-[11px] font-mono text-emerald-400 flex items-center gap-1.5 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                Compte Google Actif
+                Google Active
               </span>
             ) : directUser ? (
               <span className="text-[11px] font-mono text-indigo-400 flex items-center gap-1.5 bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-500/20">
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                Profil Mobile Actif ({directUser.phone})
+                Mobile Active ({directUser.phone})
               </span>
             ) : null}
           </div>
@@ -345,7 +404,7 @@ export function Settings() {
               />
               <div className="flex-1 w-full space-y-4">
                 <div>
-                  <label className="text-xs font-mono text-white/40 uppercase tracking-wider mb-1 block">Nom d'utilisateur</label>
+                  <label className="text-xs font-mono text-white/40 uppercase tracking-wider mb-1 block">Username</label>
                   <input 
                     type="text" 
                     value={username}
@@ -356,7 +415,7 @@ export function Settings() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-mono text-white/40 uppercase tracking-wider mb-1 block">Email (Firebase Auth)</label>
+                  <label className="text-xs font-mono text-white/40 uppercase tracking-wider mb-1 block">Email</label>
                   <input 
                     type="email" 
                     value={email}
@@ -376,7 +435,7 @@ export function Settings() {
                   className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-medium text-sm flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(99,102,241,0.3)] transition-all"
                 >
                   <LogIn className="w-4 h-4" />
-                  <span>Se connecter avec Google Firebase</span>
+                  <span>{t.settings.connectGoogle}</span>
                 </button>
               </div>
             ) : (
@@ -387,7 +446,7 @@ export function Settings() {
                     className="px-4 py-2 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/30 text-xs font-mono tracking-wider transition-colors flex items-center gap-2"
                   >
                     <LogIn className="w-3.5 h-3.5" />
-                    <span>Lier Google Firebase</span>
+                    <span>{t.settings.connectGoogle}</span>
                   </button>
                 )}
                 <button
@@ -395,7 +454,7 @@ export function Settings() {
                   className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-red-400 border border-white/10 text-xs font-mono tracking-wider transition-colors flex items-center gap-2 ml-auto"
                 >
                   <LogOut className="w-3.5 h-3.5" />
-                  <span>Se déconnecter</span>
+                  <span>{t.settings.signOut}</span>
                 </button>
               </div>
             )}
@@ -530,8 +589,8 @@ export function Settings() {
                 <Globe className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-lg font-medium tracking-wide">Internationalisation & Région</h2>
-                <p className="text-xs text-white/40">Langue, nationalité, devise financière et formats internationaux</p>
+                <h2 className="text-lg font-medium tracking-wide">{t.settings.preferences}</h2>
+                <p className="text-xs text-white/40">Multi-language, currency, nationality & unit formats</p>
               </div>
             </div>
 
@@ -546,7 +605,7 @@ export function Settings() {
               <div className="space-y-2">
                 <label className="text-xs font-mono text-white/60 uppercase tracking-wider flex items-center gap-2">
                   <Globe className="w-3.5 h-3.5 text-blue-400" />
-                  Langue du système & de l'IA
+                  {t.settings.language}
                 </label>
                 <select
                   value={language}
@@ -563,7 +622,11 @@ export function Settings() {
                     </option>
                   ))}
                 </select>
-                <p className="text-[11px] text-white/40">Affecte les réponses de Life OS, les briefings vocaux et les menus.</p>
+                <p className="text-[11px] text-white/40">
+                  {language === "fr" 
+                    ? "Affecte les réponses de Life OS, les briefings vocaux et les menus." 
+                    : "Applies across Life OS, voice briefings, and all interface menus."}
+                </p>
               </div>
 
               {/* Nationalité / Pays d'ancrage */}
@@ -571,17 +634,17 @@ export function Settings() {
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-mono text-white/60 uppercase tracking-wider flex items-center gap-2">
                     <Flag className="w-3.5 h-3.5 text-amber-400" />
-                    Nationalité & Pays ({NATIONALITIES.length} pays)
+                    {t.settings.country} ({NATIONALITIES.length})
                   </label>
                   <span className="text-[10px] font-mono text-amber-400/80">
-                    Sélection : {NATIONALITIES.find(n => n.code === nationality)?.flag} {nationality}
+                    {NATIONALITIES.find(n => n.code === nationality)?.flag} {nationality}
                   </span>
                 </div>
 
                 <div className="relative">
                   <input
                     type="text"
-                    placeholder="🔍 Filtrer les pays (ex: France, Algérie, Canada...)"
+                    placeholder="🔍 Filter countries..."
                     value={countrySearch}
                     onChange={(e) => setCountrySearch(e.target.value)}
                     className="w-full bg-black/40 border border-white/10 rounded-xl py-2 px-3 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-amber-500 mb-2"
@@ -614,7 +677,6 @@ export function Settings() {
                       ))}
                   </select>
                 </div>
-                <p className="text-[11px] text-white/40">Couvre 195+ pays du monde entier. Personnalise le contexte régional et les analyses IA.</p>
               </div>
             </div>
 
@@ -624,7 +686,7 @@ export function Settings() {
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-mono text-white/60 uppercase tracking-wider flex items-center gap-2">
                     <Coins className="w-3.5 h-3.5 text-emerald-400" />
-                    Devise Financière ({CURRENCIES.length} devises)
+                    {t.settings.currency} ({CURRENCIES.length})
                   </label>
                   <span className="text-[10px] font-mono text-emerald-400/80">
                     Active : {currency} ({CURRENCIES.find(c => c.code === currency)?.symbol})
@@ -669,7 +731,7 @@ export function Settings() {
               <div className="space-y-2">
                 <label className="text-xs font-mono text-white/60 uppercase tracking-wider flex items-center gap-2">
                   <Clock className="w-3.5 h-3.5 text-purple-400" />
-                  Format de l'heure & Alarmes
+                  {t.settings.timeFormat}
                 </label>
                 <div className="grid grid-cols-2 gap-3">
                   <button
@@ -685,7 +747,7 @@ export function Settings() {
                         : "bg-white/5 border-white/10 text-white/60 hover:text-white"
                     }`}
                   >
-                    24 Heures (14:30)
+                    24h (14:30)
                   </button>
                   <button
                     type="button"
@@ -700,10 +762,10 @@ export function Settings() {
                         : "bg-white/5 border-white/10 text-white/60 hover:text-white"
                     }`}
                   >
-                    12 Heures (02:30 PM)
+                    12h (02:30 PM)
                   </button>
                 </div>
-                <p className="text-[11px] text-white/40">Fuseau détecté : <strong className="text-white/70 font-mono">{timezone}</strong></p>
+                <p className="text-[11px] text-white/40">Timezone: <strong className="text-white/70 font-mono">{timezone}</strong></p>
               </div>
             </div>
 
@@ -712,9 +774,9 @@ export function Settings() {
               <div>
                 <p className="font-medium text-white/90 text-sm flex items-center gap-2">
                   <Gauge className="w-4 h-4 text-indigo-400" />
-                  Système d'unités de distance (Maps & Activité)
+                  {t.settings.unitSystem}
                 </p>
-                <p className="text-xs text-white/40">Kilomètres (Métrique) ou Miles (Impérial)</p>
+                <p className="text-xs text-white/40">Kilometers (Metric) or Miles (Imperial)</p>
               </div>
 
               <div className="flex items-center gap-2">
@@ -731,7 +793,7 @@ export function Settings() {
                       : "bg-white/5 border-white/10 text-white/50 hover:text-white"
                   }`}
                 >
-                  Métrique (km, m)
+                  Metric (km, m)
                 </button>
                 <button
                   type="button"
@@ -746,7 +808,7 @@ export function Settings() {
                       : "bg-white/5 border-white/10 text-white/50 hover:text-white"
                   }`}
                 >
-                  Impérial (mi, ft)
+                  Imperial (mi, ft)
                 </button>
               </div>
             </div>
@@ -784,28 +846,6 @@ export function Settings() {
                 </div>
               </div>
               <Toggle enabled={true} locked={true} />
-            </div>
-          </div>
-        </section>
-
-        {/* Sécurité & Accès */}
-        <section className="rounded-3xl bg-white/5 border border-white/10 overflow-hidden backdrop-blur-md">
-          <div className="p-6 border-b border-white/10 flex items-center gap-3 bg-white/[0.02]">
-            <Shield className="w-5 h-5 text-emerald-400" />
-            <h2 className="text-lg font-medium tracking-wide">Sécurité & Biométrie</h2>
-          </div>
-          <div className="p-6 space-y-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
-                  <Fingerprint className="w-5 h-5" />
-                </div>
-                <div>
-                  <p className="font-medium text-white/90">Déverrouillage Biométrique OMNI</p>
-                  <p className="text-sm text-white/40">Utiliser FaceID / TouchID pour sécuriser l'accès</p>
-                </div>
-              </div>
-              <Toggle enabled={biometrics} onChange={() => handleToggle("biometrics", !biometrics)} />
             </div>
           </div>
         </section>

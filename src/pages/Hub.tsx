@@ -3,9 +3,11 @@ import { motion } from "motion/react";
 import { Link, useNavigate } from "react-router-dom";
 import { vibrate } from "../lib/utils";
 import { useAuth } from "../context/AuthContext";
+import { usePreferences } from "../context/PreferencesContext";
 
 export function Hub() {
   const { user, signInWithGoogle, omniScore } = useAuth();
+  const { t } = usePreferences();
   const navigate = useNavigate();
 
   // Gamification Tier
@@ -30,12 +32,12 @@ export function Hub() {
         <div>
           <div className="flex items-center gap-3 text-indigo-400 mb-2">
             <Activity className="w-5 h-5" />
-            <span className="font-mono text-sm tracking-widest uppercase">Command Center</span>
+            <span className="font-mono text-sm tracking-widest uppercase">{t.hub.commandCenter}</span>
           </div>
           <h1 className="text-4xl md:text-5xl font-light tracking-tight text-white/90">
-            Bienvenue sur <span className="font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400">OMNI</span>
+            {t.hub.welcomeTitle} <span className="font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400">OMNI</span>
           </h1>
-          <p className="text-white/50 mt-2 text-lg font-light">Super-App pilotée par l'intelligence Gemini.</p>
+          <p className="text-white/50 mt-2 text-lg font-light">{t.hub.welcomeSub}</p>
         </div>
         <Link 
           to="/settings"
@@ -65,14 +67,14 @@ export function Hub() {
                   <span>{rank.title}</span>
                 </div>
               </div>
-              <p className="text-white/50 text-sm font-light">Indicateur de productivité et d'apprentissage global.</p>
+              <p className="text-white/50 text-sm font-light">{t.hub.scoreDesc}</p>
             </div>
           </div>
           <div className="text-center md:text-right relative z-10">
             <div className="text-5xl font-light tracking-tighter text-white font-mono">{omniScore} <span className="text-2xl text-white/40">/ 100</span></div>
             <p className="text-xs font-mono text-emerald-400 uppercase tracking-widest mt-2 flex items-center justify-end gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              {omniScore > 0 ? "Progression en cours" : "Prêt à démarrer"}
+              {omniScore > 0 ? "Active" : "Ready"}
             </p>
           </div>
         </motion.div>
@@ -88,8 +90,8 @@ export function Hub() {
                   <Shield className="w-6 h-6" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-medium tracking-wide text-white/90">Identité & Sécurité Firebase</h2>
-                  <p className="text-xs text-white/40 font-mono">Authentification sécurisée Google</p>
+                  <h2 className="text-xl font-medium tracking-wide text-white/90">{t.settings.account}</h2>
+                  <p className="text-xs text-white/40 font-mono">Firebase Cloud Security</p>
                 </div>
               </div>
               <span className={`px-3 py-1 rounded-full text-[10px] font-mono tracking-widest uppercase border ${
@@ -97,21 +99,21 @@ export function Hub() {
                   ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" 
                   : "bg-amber-500/10 text-amber-400 border-amber-500/20"
               }`}>
-                {user ? "Authentifié" : "Non Connecté"}
+                {user ? "Active" : "Guest"}
               </span>
             </div>
 
             <div>
               <p className="text-white/60 mb-6 max-w-md font-light leading-relaxed">
                 {user 
-                  ? `Connecté en tant que ${user.displayName || user.email}. Tes données, sessions de Focus et messages Gemini sont synchronisés dans Firestore.`
-                  : "Connecte-toi avec Google pour sauvegarder tes sessions de travail, tes messages Gemini et tes interactions communautaires sur le Cloud."
+                  ? `${user.displayName || user.email} • Cloud Firestore Synchronized`
+                  : (t.settings.subtitle)
                 }
               </p>
               {user ? (
                 <div className="flex items-center gap-3 text-sm text-emerald-400 font-mono">
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>Cloud Firestore synchronisé</span>
+                  <span>Cloud Firestore Sync</span>
                 </div>
               ) : (
                 <motion.button 
@@ -120,7 +122,7 @@ export function Hub() {
                   className="flex items-center justify-center gap-3 px-6 py-4 rounded-2xl bg-gradient-to-r from-indigo-600/80 to-purple-600/80 hover:from-indigo-500 hover:to-purple-500 transition-all shadow-[0_0_20px_rgba(99,102,241,0.2)] font-medium tracking-wide w-full sm:w-auto border border-white/10 text-white"
                 >
                   <Fingerprint className="w-5 h-5" />
-                  <span>Connexion Google Firebase</span>
+                  <span>{t.settings.connectGoogle}</span>
                   <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
                 </motion.button>
               )}
@@ -138,11 +140,11 @@ export function Hub() {
             className="rounded-3xl bg-black/40 border border-white/10 p-6 backdrop-blur-xl hover:border-blue-500/40 hover:bg-white/[0.03] transition-all cursor-pointer group shadow-[inset_0_0_30px_rgba(255,255,255,0.01)]"
           >
             <div className="flex items-center justify-between mb-4">
-              <span className="text-xs font-mono text-blue-400 uppercase tracking-widest">Sprint Express</span>
+              <span className="text-xs font-mono text-blue-400 uppercase tracking-widest">{t.nav.focus}</span>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300">25 min</span>
             </div>
-            <h3 className="text-lg font-medium text-white/90 group-hover:text-white mb-1">Démarrer Focus</h3>
-            <p className="text-xs text-white/40 font-light">Lancer un bloc Pomodoro avec ambiance sonore et +5 pts.</p>
+            <h3 className="text-lg font-medium text-white/90 group-hover:text-white mb-1">{t.hub.quickSprint}</h3>
+            <p className="text-xs text-white/40 font-light">{t.hub.quickSprintSub}</p>
           </div>
 
           <div 
@@ -153,11 +155,11 @@ export function Hub() {
             className="rounded-3xl bg-black/40 border border-white/10 p-6 backdrop-blur-xl hover:border-teal-500/40 hover:bg-white/[0.03] transition-all cursor-pointer group shadow-[inset_0_0_30px_rgba(255,255,255,0.01)]"
           >
             <div className="flex items-center justify-between mb-4">
-              <span className="text-xs font-mono text-teal-400 uppercase tracking-widest">Simulateur 50/30/20</span>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-teal-500/20 text-teal-300">Academy</span>
+              <span className="text-xs font-mono text-teal-400 uppercase tracking-widest">{t.nav.academy}</span>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-teal-500/20 text-teal-300">50/30/20</span>
             </div>
-            <h3 className="text-lg font-medium text-white/90 group-hover:text-white mb-1">Calculer son Budget</h3>
-            <p className="text-xs text-white/40 font-light">Calculer sa répartition idéale sans crédit ni piège financier.</p>
+            <h3 className="text-lg font-medium text-white/90 group-hover:text-white mb-1">{t.wallet.title}</h3>
+            <p className="text-xs text-white/40 font-light">{t.wallet.subtitle}</p>
           </div>
 
           <div 
@@ -169,10 +171,10 @@ export function Hub() {
           >
             <div className="flex items-center justify-between mb-4">
               <span className="text-xs font-mono text-indigo-400 uppercase tracking-widest">Life OS</span>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300">Gemini 3.8</span>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300">Gemini</span>
             </div>
-            <h3 className="text-lg font-medium text-white/90 group-hover:text-white mb-1">Piloter par Commande</h3>
-            <p className="text-xs text-white/40 font-light">Demander à l'IA d'organiser tes tâches et contrôler l'app.</p>
+            <h3 className="text-lg font-medium text-white/90 group-hover:text-white mb-1">{t.hub.openLifeOs}</h3>
+            <p className="text-xs text-white/40 font-light">{t.hub.openLifeOsSub}</p>
           </div>
         </div>
 

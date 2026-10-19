@@ -22,39 +22,47 @@ import {
   Settings as SettingsIcon,
   Heart,
   Coffee,
-  Crown
+  Crown,
+  ArrowRight
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import ReactMarkdown from "react-markdown";
 import { cn, vibrate } from "../lib/utils";
 import { sound } from "../lib/sound";
 import { useAuth } from "../context/AuthContext";
 import { usePreferences } from "../context/PreferencesContext";
+import { useOffline } from "../context/OfflineContext";
 import { CommandPalette } from "./CommandPalette";
 import { MobileSpeedDial } from "./MobileSpeedDial";
 import { NotificationManagerOverlay } from "./NotificationBanner";
-
-const navItems = [
-  { path: "/", label: "HUB", icon: LayoutDashboard },
-  { path: "/focus", label: "FOCUS", icon: Target },
-  { path: "/wallet", label: "ACADEMY", icon: Wallet },
-  { path: "/community", label: "COMMUNITY", icon: Users },
-  { path: "/service", label: "SERVICE", icon: Briefcase },
-  { path: "/life-os", label: "LIFE OS", icon: Sparkles },
-  { path: "/upgrade", label: "UPGRADE", icon: Crown },
-  { path: "/settings", label: "SETTINGS", icon: SettingsIcon },
-  { path: "/help", label: "HELP", icon: HelpCircle },
-];
+import { OfflineBanner } from "./OfflineBanner";
+import { generateLocalAssistantReply, detectActionFromText, ActionPayload } from "../lib/lifeOsAssistant";
+import { Wifi, WifiOff } from "lucide-react";
 
 export function Layout() {
   const { user, directUser, signInWithGoogle, signOut, omniScore } = useAuth();
-  const { language, currency, nationality } = usePreferences();
+  const { language, currency, nationality, t } = usePreferences();
+  const { isOffline, toggleForceOffline, isOnline, forceOffline } = useOffline();
   const navigate = useNavigate();
   const location = useLocation();
+
+  const navItems = [
+    { path: "/", label: t.nav.hub, icon: LayoutDashboard },
+    { path: "/focus", label: t.nav.focus, icon: Target },
+    { path: "/wallet", label: t.nav.academy, icon: Wallet },
+    { path: "/community", label: t.nav.community, icon: Users },
+    { path: "/service", label: t.nav.service, icon: Briefcase },
+    { path: "/life-os", label: t.nav.lifeos, icon: Sparkles },
+    { path: "/upgrade", label: t.nav.upgrade, icon: Crown },
+    { path: "/settings", label: t.nav.settings, icon: SettingsIcon },
+    { path: "/help", label: t.nav.help, icon: HelpCircle },
+  ];
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isQuickGeminiOpen, setIsQuickGeminiOpen] = useState(false);
   const [quickInput, setQuickInput] = useState("");
   const [quickLoading, setQuickLoading] = useState(false);
   const [quickReply, setQuickReply] = useState<string | null>(null);
+  const [quickAction, setQuickAction] = useState<ActionPayload | undefined>(undefined);
 
   // Global Keyboard Shortcuts (Cmd+K / Ctrl+K to open Command Palette)
   useEffect(() => {
@@ -69,38 +77,103 @@ export function Layout() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  const executeQuickAction = (act: ActionPayload) => {
+    vibrate(40);
+    sound.playClick();
+    setIsQuickGeminiOpen(false);
+    if (act.type === "START_FOCUS") {
+      navigate("/focus", { state: { autoStart: true, duration: act.detail ? parseInt(act.detail, 10) * 60 : 25 * 60 } });
+    } else if (act.type === "LEARN_FINANCE") {
+      navigate("/wallet", { state: { prefilledTopic: act.detail } });
+    } else if (act.type === "CREATE_POST") {
+      navigate("/community", { state: { openModal: true, initialTag: "General" } });
+    } else if (act.type === "VIEW_ROUTINES") {
+      navigate("/focus", { state: { tab: "routines" } });
+    } else if (act.type === "VIEW_UPGRADE") {
+      navigate("/upgrade");
+    } else if (act.type === "OPEN_SETTINGS") {
+      navigate("/settings");
+    } else if (act.type === "TOGGLE_OFFLINE") {
+      toggleForceOffline();
+    } else if (act.target) {
+      navigate(act.target);
+    }
+  };
+
   const handleQuickGemini = async () => {
     if (!quickInput.trim() || quickLoading) return;
     setQuickLoading(true);
     setQuickReply(null);
+    setQuickAction(undefined);
     vibrate(30);
+
+    const promptText = quickInput.trim();
+
+    if (isOffline) {
+      const local = generateLocalAssistantReply(promptText, language);
+      setQuickReply(local.reply);
+      setQuickAction(local.action);
+      setQuickInput("");
+      setQuickLoading(false);
+      sound.playComplete();
+      return;
+    }
 
     try {
       const res = await fetch("/api/gemini/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: [{ role: "user", content: quickInput }],
+          messages: [{ role: "user", content: promptText }],
           currentTab: location.pathname,
           language,
           currency,
           nationality,
         }),
       });
+
+      if (!res.ok) throw new Error("Status " + res.status);
+
       const data = await res.json();
-      setQuickReply(data.reply || "Commande exécutée.");
+      const raw = data.reply || "";
+      if (!raw || raw.includes("anomalie temporaire") || data.error) {
+        const local = generateLocalAssistantReply(promptText, language);
+        setQuickReply(local.reply);
+        setQuickAction(local.action);
+      } else {
+        const actionMatch = raw.match(/:::action\s*(\{.*?\})\s*:::/s);
+        let parsedAct: ActionPayload | undefined = undefined;
+        let cleanText = raw;
+        if (actionMatch && actionMatch[1]) {
+          try {
+            parsedAct = JSON.parse(actionMatch[1]);
+            cleanText = raw.replace(/:::action\s*(\{.*?\})\s*:::/s, "").trim();
+          } catch (e) {}
+        }
+        const action = parsedAct || detectActionFromText(promptText, cleanText);
+        setQuickReply(cleanText);
+        setQuickAction(action);
+      }
       setQuickInput("");
+      sound.playComplete();
     } catch (e) {
-      setQuickReply("Erreur lors de la communication avec Gemini.");
+      // Fallback local neuro reply
+      const local = generateLocalAssistantReply(promptText, language);
+      setQuickReply(local.reply);
+      setQuickAction(local.action);
+      setQuickInput("");
+      sound.playComplete();
     } finally {
       setQuickLoading(false);
     }
   };
 
   return (
-    <div className="flex h-screen w-full bg-[#050505] text-white overflow-hidden font-sans selection:bg-indigo-500/30">
-      {/* Sidebar for Desktop */}
-      <aside className="hidden md:flex flex-col w-72 border-r border-white/5 bg-black/40 backdrop-blur-2xl p-6 relative z-20">
+    <div className="flex flex-col h-screen w-full bg-[#050505] text-white overflow-hidden font-sans selection:bg-indigo-500/30">
+      <OfflineBanner />
+      <div className="flex flex-1 overflow-hidden relative">
+        {/* Sidebar for Desktop */}
+        <aside className="hidden md:flex flex-col w-72 border-r border-white/5 bg-black/40 backdrop-blur-2xl p-6 relative z-20">
         <div className="absolute inset-y-0 right-0 w-[1px] bg-gradient-to-b from-transparent via-white/10 to-transparent" />
         
         {/* Logo OMNI */}
@@ -239,14 +312,32 @@ export function Layout() {
         </div>
 
         {/* Bottom Status */}
-        <div className="mt-auto pt-6 border-t border-white/5 px-4 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)] animate-pulse" />
-            <span className="text-[11px] font-mono text-white/40 uppercase tracking-widest">OMNI Engine</span>
+        <div className="mt-auto pt-4 border-t border-white/5 px-2 space-y-2">
+          <button
+            onClick={toggleForceOffline}
+            className={`w-full py-2 px-3 rounded-xl border text-xs font-mono flex items-center justify-between transition-all cursor-pointer ${
+              isOffline
+                ? "bg-amber-500/15 border-amber-500/30 text-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
+                : "bg-white/[0.03] border-white/10 text-white/60 hover:text-white"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              {isOffline ? (
+                <WifiOff className="w-3.5 h-3.5 text-amber-400" />
+              ) : (
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              )}
+              <span className="text-[11px]">{isOffline ? "Mode Hors-Ligne (100% Autonome)" : "Système En Ligne"}</span>
+            </div>
+            <span className="text-[10px] text-white/40 uppercase">{isOffline ? "Actif" : "OK"}</span>
+          </button>
+
+          <div className="flex items-center justify-between px-2">
+            <span className="text-[11px] font-mono text-white/40 uppercase tracking-widest">OMNI Life OS</span>
+            <span className="text-[11px] font-mono text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full border border-indigo-500/20">
+              Score: {omniScore}
+            </span>
           </div>
-          <span className="text-[11px] font-mono text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full border border-indigo-500/20">
-            Score: {omniScore}
-          </span>
         </div>
       </aside>
 
@@ -260,7 +351,7 @@ export function Layout() {
           <div className="fixed bottom-24 md:bottom-8 right-6 z-40">
             <button
               onClick={() => setIsQuickGeminiOpen(true)}
-              className="flex items-center gap-3 px-5 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-medium shadow-[0_0_30px_rgba(99,102,241,0.4)] border border-white/20 transition-all hover:scale-105 active:scale-95 group"
+              className="flex items-center gap-3 px-5 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-medium shadow-[0_0_30px_rgba(99,102,241,0.4)] border border-white/20 transition-all hover:scale-105 active:scale-95 group cursor-pointer"
             >
               <Sparkles className="w-5 h-5 text-indigo-200 group-hover:rotate-12 transition-transform" />
               <span className="text-xs font-mono tracking-widest uppercase">Commander Life OS</span>
@@ -272,6 +363,7 @@ export function Layout() {
           <Outlet />
         </div>
       </main>
+    </div>
 
       {/* Quick Gemini Overlay Drawer */}
       <AnimatePresence>
@@ -312,8 +404,20 @@ export function Layout() {
                 </p>
 
                 {quickReply && (
-                  <div className="p-4 rounded-2xl bg-white/5 border border-white/10 text-sm text-white/90 font-light leading-relaxed max-h-56 overflow-y-auto">
-                    {quickReply}
+                  <div className="p-4 rounded-2xl bg-white/5 border border-white/10 text-sm text-white/90 font-light leading-relaxed max-h-56 overflow-y-auto space-y-3">
+                    <ReactMarkdown>{quickReply}</ReactMarkdown>
+                    {quickAction && (
+                      <div className="mt-3 pt-3 border-t border-white/10 flex items-center justify-between bg-indigo-500/10 p-2.5 rounded-xl border border-indigo-500/20">
+                        <span className="text-xs text-indigo-300 font-medium truncate">{quickAction.title}</span>
+                        <button
+                          onClick={() => executeQuickAction(quickAction)}
+                          className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-mono flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer"
+                        >
+                          <span>Exécuter</span>
+                          <ArrowRight className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

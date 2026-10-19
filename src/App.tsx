@@ -16,6 +16,31 @@ import { Drive } from "./pages/Drive";
 import { Upgrade } from "./pages/Upgrade";
 import { AuthProvider } from "./context/AuthContext";
 import { PreferencesProvider } from "./context/PreferencesContext";
+import { OfflineProvider } from "./context/OfflineContext";
+
+function AppContent() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<Layout />}>
+          <Route index element={<Hub />} />
+          <Route path="focus" element={<Focus />} />
+          <Route path="wallet" element={<Wallet />} />
+          <Route path="community" element={<Community />} />
+          <Route path="service" element={<Service />} />
+          <Route path="life-os" element={<LifeOS />} />
+          <Route path="gemini" element={<Navigate to="/life-os" replace />} />
+          <Route path="upgrade" element={<Upgrade />} />
+          <Route path="maps" element={<Maps />} />
+          <Route path="gmail" element={<Gmail />} />
+          <Route path="drive" element={<Drive />} />
+          <Route path="settings" element={<Settings />} />
+          <Route path="help" element={<Help />} />
+        </Route>
+      </Routes>
+    </Router>
+  );
+}
 
 export default function App() {
   const [hasOnboarded, setHasOnboarded] = useState<boolean | null>(null);
@@ -27,44 +52,22 @@ export default function App() {
 
   if (hasOnboarded === null) return null; // Wait for localStorage check
 
-  if (!hasOnboarded) {
-    return (
-      <AuthProvider>
-        <PreferencesProvider>
-          <Onboarding 
-            onComplete={() => {
-              localStorage.setItem("omni_onboarded", "true");
-              setHasOnboarded(true);
-            }} 
-          />
-        </PreferencesProvider>
-      </AuthProvider>
-    );
-  }
-
   return (
     <AuthProvider>
       <PreferencesProvider>
-        <Router>
-          <Routes>
-            <Route path="/" element={<Layout />}>
-            <Route index element={<Hub />} />
-            <Route path="focus" element={<Focus />} />
-            <Route path="wallet" element={<Wallet />} />
-            <Route path="community" element={<Community />} />
-            <Route path="service" element={<Service />} />
-            <Route path="life-os" element={<LifeOS />} />
-            <Route path="gemini" element={<Navigate to="/life-os" replace />} />
-            <Route path="upgrade" element={<Upgrade />} />
-            <Route path="maps" element={<Maps />} />
-            <Route path="gmail" element={<Gmail />} />
-            <Route path="drive" element={<Drive />} />
-            <Route path="settings" element={<Settings />} />
-            <Route path="help" element={<Help />} />
-          </Route>
-        </Routes>
-      </Router>
-    </PreferencesProvider>
-  </AuthProvider>
+        <OfflineProvider>
+          {!hasOnboarded ? (
+            <Onboarding 
+              onComplete={() => {
+                localStorage.setItem("omni_onboarded", "true");
+                setHasOnboarded(true);
+              }} 
+            />
+          ) : (
+            <AppContent />
+          )}
+        </OfflineProvider>
+      </PreferencesProvider>
+    </AuthProvider>
   );
 }

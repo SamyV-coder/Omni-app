@@ -4,7 +4,10 @@ import {
   onAuthStateChanged, 
   signInWithPopup, 
   GoogleAuthProvider, 
-  signOut as firebaseSignOut 
+  signOut as firebaseSignOut,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  updateProfile
 } from "firebase/auth";
 import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
@@ -35,6 +38,8 @@ interface AuthContextType {
   loading: boolean;
   accessToken: string | null;
   signInWithGoogle: () => Promise<string | null>;
+  signInWithEmail: (email: string, pass: string) => Promise<User>;
+  signUpWithEmail: (email: string, pass: string, phone?: string) => Promise<User>;
   setDirectCredentials: (creds: { email: string; phone: string; password?: string }) => void;
   signOut: () => Promise<void>;
   omniScore: number;
@@ -47,6 +52,8 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   accessToken: null,
   signInWithGoogle: async () => null,
+  signInWithEmail: async () => { throw new Error("Not implemented"); },
+  signUpWithEmail: async () => { throw new Error("Not implemented"); },
   setDirectCredentials: () => {},
   signOut: async () => {},
   omniScore: 0,
@@ -141,6 +148,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const signInWithEmail = async (email: string, pass: string): Promise<User> => {
+    try {
+      const cred = await signInWithEmailAndPassword(auth, email, pass);
+      return cred.user;
+    } catch (error) {
+      console.error("Firebase Email Sign-In Error:", error);
+      throw error;
+    }
+  };
+
+  const signUpWithEmail = async (email: string, pass: string, phone?: string): Promise<User> => {
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, email, pass);
+      const user = cred.user;
+      
+      const displayName = email.split("@")[0] || "Agent OMNI";
+      try {
+        await updateProfile(user, { displayName });
+      } catch (e) {
+        console.warn("Could not update displayName:", e);
+      }
+
+      // Sync user profile in Firestore
+      try {
+        const userRef = doc(db, "users", user.uid);
+        await setDoc(userRef, {
+          uid: user.uid,
+          email: user.email || "",
+          displayName,
+          phone: phone || "",
+          photoURL: `https://api.dicebear.com/7.x/bottts/svg?seed=${user.uid}`,
+          omniScore: 0,
+          createdAt: new Date().toISOString(),
+        });
+      } catch (firestoreErr) {
+        console.warn("Could not write user to Firestore:", firestoreErr);
+      }
+
+      return user;
+    } catch (error) {
+      console.error("Firebase Email Sign-Up Error:", error);
+      throw error;
+    }
+  };
+
   const signOut = async () => {
     try {
       await firebaseSignOut(auth);
@@ -170,7 +222,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, directUser, loading, accessToken, signInWithGoogle, setDirectCredentials, signOut, omniScore, updateScore }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      directUser, 
+      loading, 
+      accessToken, 
+      signInWithGoogle, 
+      signInWithEmail,
+      signUpWithEmail,
+      setDirectCredentials, 
+      signOut, 
+      omniScore, 
+      updateScore 
+    }}>
       {children}
     </AuthContext.Provider>
   );
