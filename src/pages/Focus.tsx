@@ -252,6 +252,34 @@ export function Focus() {
     setTimeLeft(minutes * 60);
   };
 
+  const adjustMinutes = (delta: number) => {
+    vibrate(25);
+    sound.playClick();
+    if (isActive) {
+      // Direct adjustment while running!
+      setTimeLeft((prev) => Math.max(15, prev + delta * 60));
+      setInitialDuration((prev) => Math.max(15, prev + delta * 60));
+    } else {
+      const currentMin = Math.round(initialDuration / 60);
+      const nextMin = Math.max(1, Math.min(300, currentMin + delta));
+      setInitialDuration(nextMin * 60);
+      setTimeLeft(nextMin * 60);
+    }
+  };
+
+  const setCustomDuration = (minutes: number) => {
+    const valid = Math.max(1, Math.min(300, isNaN(minutes) ? 25 : minutes));
+    vibrate(30);
+    sound.playClick();
+    if (!isActive) {
+      setInitialDuration(valid * 60);
+      setTimeLeft(valid * 60);
+    } else {
+      setTimeLeft(valid * 60);
+      setInitialDuration(valid * 60);
+    }
+  };
+
   const handleToggleAmbience = (mode: "rain" | "waves" | "space" | "fire" | "bowl") => {
     sound.playClick();
     const nextMode = ambience === mode ? "off" : mode;
@@ -297,6 +325,18 @@ export function Focus() {
             </span>
             <div className="text-8xl md:text-[140px] font-mono font-extralight tracking-tighter text-white drop-shadow-[0_0_50px_rgba(255,255,255,0.2)]">
               {formatTime(timeLeft)}
+            </div>
+
+            <div className="flex items-center justify-center gap-2">
+              {[-5, -1, 1, 5].map((delta) => (
+                <button
+                  key={delta}
+                  onClick={() => adjustMinutes(delta)}
+                  className="px-3 py-1 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-xs font-mono text-white/80 hover:text-white transition-all cursor-pointer"
+                >
+                  {delta > 0 ? `+${delta}m` : `${delta}m`}
+                </button>
+              ))}
             </div>
 
             <div className="flex items-center justify-center gap-6">
@@ -353,66 +393,89 @@ export function Focus() {
         </div>
       </header>
 
-      {/* Barre de contrôle : Presets & Bruit d'ambiance audio */}
-      <div className="flex flex-wrap items-center justify-between gap-4 bg-white/[0.02] border border-white/5 p-4 rounded-2xl backdrop-blur-md">
-        {/* Presets de durée */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-mono text-white/40 uppercase tracking-widest mr-1">Durée :</span>
-          {[
-            { label: "15m", full: "15 min (Sprint)", min: 15 },
-            { label: "25m", full: "25 min (Pomodoro)", min: 25 },
-            { label: "50m", full: "50 min (Deep Work)", min: 50 },
-          ].map(p => (
-            <button
-              key={p.min}
-              onClick={() => setPreset(p.min)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-medium border transition-all ${
-                initialDuration === p.min * 60 && !isActive 
-                  ? "bg-blue-600/30 border-blue-500 text-blue-300 shadow-[0_0_15px_rgba(59,130,246,0.3)]" 
-                  : "bg-white/5 border-white/10 text-white/60 hover:text-white hover:bg-white/10"
-              }`}
-            >
-              {p.full}
-            </button>
-          ))}
+      {/* Barre de contrôle : Presets, Minuteur Personnalisé & Bruit d'ambiance audio */}
+      <div className="flex flex-col gap-4 bg-white/[0.02] border border-white/5 p-4 rounded-2xl backdrop-blur-md">
+        {/* Presets rapides de durée & Steppers */}
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-xs font-mono text-white/40 uppercase tracking-widest mr-1">Presets :</span>
+            {[
+              { label: "5m", min: 5 },
+              { label: "10m", min: 10 },
+              { label: "15m", min: 15 },
+              { label: "20m", min: 20 },
+              { label: "25m", min: 25 },
+              { label: "30m", min: 30 },
+              { label: "45m", min: 45 },
+              { label: "50m", min: 50 },
+              { label: "60m", min: 60 },
+              { label: "90m", min: 90 },
+            ].map(p => (
+              <button
+                key={p.min}
+                onClick={() => setPreset(p.min)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all cursor-pointer ${
+                  initialDuration === p.min * 60 && !isActive 
+                    ? "bg-blue-600/30 border-blue-500 text-blue-300 shadow-[0_0_15px_rgba(59,130,246,0.3)] font-semibold" 
+                    : "bg-white/5 border-white/10 text-white/60 hover:text-white hover:bg-white/10"
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Saisie Libre Personnalisée (1 à 180 min) */}
+          <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-xl border border-white/10">
+            <span className="text-xs font-mono text-white/40">Durée libre :</span>
+            <input 
+              type="number"
+              min={1}
+              max={300}
+              value={Math.round(initialDuration / 60)}
+              onChange={(e) => setCustomDuration(parseInt(e.target.value, 10))}
+              className="w-14 bg-black/60 border border-white/20 rounded-lg px-2 py-0.5 text-xs font-mono text-center text-white focus:outline-none focus:border-blue-400"
+            />
+            <span className="text-xs font-mono text-white/60">min</span>
+          </div>
         </div>
 
-        {/* Générateur d'ambiance Deep Work */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-mono text-white/40 uppercase tracking-widest mr-1 flex items-center gap-1">
-            <Volume2 className="w-3.5 h-3.5 text-blue-400" />
-            Ambiance :
-          </span>
-          {[
-            { id: "rain", label: "🌧️ Pluie" },
-            { id: "waves", label: "🌊 Vagues" },
-            { id: "space", label: "🪐 Espace" },
-            { id: "fire", label: "🔥 Foyer" },
-            { id: "bowl", label: "🔔 Bols Zen" },
-          ].map(item => (
-            <button
-              key={item.id}
-              onClick={() => handleToggleAmbience(item.id as any)}
-              className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${
-                ambience === item.id
-                  ? "bg-indigo-600/30 border-indigo-400 text-indigo-300 shadow-[0_0_10px_rgba(99,102,241,0.3)] animate-pulse"
-                  : "bg-white/5 border-white/10 text-white/60 hover:text-white"
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
-          {ambience !== "off" && (
-            <button
-              onClick={() => handleToggleAmbience(ambience as any)}
-              className="p-1 rounded-lg bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30"
-              title="Couper le son"
-            >
-              <VolumeX className="w-3.5 h-3.5" />
-            </button>
-          )}
-
-          <div className="h-4 w-[1px] bg-white/10 mx-1 hidden sm:block" />
+        {/* Ambiance sonore & Mode Zen */}
+        <div className="flex items-center justify-between gap-4 flex-wrap pt-2 border-t border-white/5">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-mono text-white/40 uppercase tracking-widest mr-1 flex items-center gap-1">
+              <Volume2 className="w-3.5 h-3.5 text-blue-400" />
+              Ambiance :
+            </span>
+            {[
+              { id: "rain", label: "🌧️ Pluie" },
+              { id: "waves", label: "🌊 Vagues" },
+              { id: "space", label: "🪐 Espace" },
+              { id: "fire", label: "🔥 Foyer" },
+              { id: "bowl", label: "🔔 Bols Zen" },
+            ].map(item => (
+              <button
+                key={item.id}
+                onClick={() => handleToggleAmbience(item.id as any)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
+                  ambience === item.id
+                    ? "bg-indigo-600/30 border-indigo-400 text-indigo-300 shadow-[0_0_10px_rgba(99,102,241,0.3)] animate-pulse"
+                    : "bg-white/5 border-white/10 text-white/60 hover:text-white"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+            {ambience !== "off" && (
+              <button
+                onClick={() => handleToggleAmbience(ambience as any)}
+                className="p-1 rounded-lg bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 cursor-pointer"
+                title="Couper le son"
+              >
+                <VolumeX className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
 
           {/* Zen Mode Button */}
           <button
@@ -421,14 +484,14 @@ export function Focus() {
               sound.playClick();
               setIsZenMode(!isZenMode);
             }}
-            className={`px-3 py-1 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition-all ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition-all cursor-pointer ${
               isZenMode
                 ? "bg-emerald-500/20 border-emerald-400 text-emerald-300"
                 : "bg-white/5 border-white/10 text-white/60 hover:text-white"
             }`}
           >
             {isZenMode ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-            <span>{isZenMode ? "Quitter Zen" : "Mode Zen"}</span>
+            <span>{isZenMode ? "Quitter Zen" : "Mode Zen Immersion"}</span>
           </button>
         </div>
       </div>
@@ -437,13 +500,13 @@ export function Focus() {
         {/* Timer & Timeline */}
         <div className="md:col-span-2 space-y-8">
           {/* Active Timer */}
-          <div className="rounded-3xl bg-black/40 border border-white/10 p-10 backdrop-blur-xl flex flex-col items-center justify-center relative overflow-hidden shadow-[inset_0_0_40px_rgba(255,255,255,0.02)]">
+          <div className="rounded-3xl bg-black/40 border border-white/10 p-8 md:p-10 backdrop-blur-xl flex flex-col items-center justify-center relative overflow-hidden shadow-[inset_0_0_40px_rgba(255,255,255,0.02)]">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.15),transparent_60%)] pointer-events-none" />
             
             {/* Barre de progression circulaire / linéaire */}
-            <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden mb-6 relative">
+            <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden mb-6 relative">
               <div 
-                className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-1000 rounded-full shadow-[0_0_10px_rgba(59,130,246,0.8)]"
+                className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-emerald-400 transition-all duration-1000 rounded-full shadow-[0_0_12px_rgba(59,130,246,0.8)]"
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
@@ -451,27 +514,67 @@ export function Focus() {
             <div className="flex items-center justify-between w-full mb-4 px-2">
               <h2 className="text-xs font-mono tracking-widest uppercase text-blue-400 flex items-center gap-2">
                 <span className={`w-2 h-2 rounded-full ${isActive ? "bg-emerald-400 animate-ping" : "bg-blue-400"}`} />
-                {isActive ? "Deep Work en cours" : "Prêt à démarrer"}
+                {isActive ? "Deep Work en cours" : "Minuteur Prêt"}
               </h2>
               <span className="text-xs font-mono text-white/40">
-                Progression : {Math.round(progressPercent)}%
+                Progression : {Math.round(progressPercent)}% • Total : {Math.round(initialDuration / 60)}m
               </span>
             </div>
             
-            <div className="text-7xl md:text-9xl font-light tracking-tighter text-white mb-10 relative z-10 font-mono drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]">
+            <div className="text-7xl md:text-9xl font-light tracking-tighter text-white mb-6 relative z-10 font-mono drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]">
               {formatTime(timeLeft)}
+            </div>
+
+            {/* Steppers Rapides pour Ajuster à la volée (+1m, +5m, +10m, -5m...) */}
+            <div className="flex items-center justify-center gap-1.5 flex-wrap mb-8 relative z-10">
+              <span className="text-[10px] font-mono text-white/40 uppercase tracking-widest mr-1">Ajuster :</span>
+              {[
+                { label: "-10m", delta: -10 },
+                { label: "-5m", delta: -5 },
+                { label: "-1m", delta: -1 },
+                { label: "+1m", delta: 1 },
+                { label: "+5m", delta: 5 },
+                { label: "+10m", delta: 10 },
+                { label: "+15m", delta: 15 },
+              ].map(step => (
+                <button
+                  key={step.label}
+                  onClick={() => adjustMinutes(step.delta)}
+                  className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 active:bg-blue-600/30 border border-white/10 hover:border-blue-400 text-[11px] font-mono text-white/80 hover:text-white transition-all cursor-pointer"
+                  title={`${step.delta > 0 ? "Ajouter" : "Retirer"} ${Math.abs(step.delta)} min`}
+                >
+                  {step.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Curseur Slider de Durée Contrôlable à volonté (1 à 180 min) */}
+            <div className="w-full max-w-md px-4 mb-8 relative z-10 space-y-1">
+              <div className="flex justify-between text-[10px] font-mono text-white/40">
+                <span>1 min</span>
+                <span className="text-blue-300 font-semibold">{Math.round((isActive ? timeLeft : initialDuration) / 60)} minutes</span>
+                <span>180 min</span>
+              </div>
+              <input 
+                type="range"
+                min={1}
+                max={180}
+                value={Math.round((isActive ? timeLeft : initialDuration) / 60)}
+                onChange={(e) => setCustomDuration(parseInt(e.target.value, 10))}
+                className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500"
+              />
             </div>
             
             <div className="flex items-center gap-6 relative z-10">
               <button 
                 onClick={toggleTimer}
-                className="w-20 h-20 rounded-full bg-white text-black flex items-center justify-center hover:bg-white/90 transition-all shadow-[0_0_40px_rgba(255,255,255,0.3)] hover:scale-105 active:scale-95"
+                className="w-20 h-20 rounded-full bg-white text-black flex items-center justify-center hover:bg-white/90 transition-all shadow-[0_0_40px_rgba(255,255,255,0.3)] hover:scale-105 active:scale-95 cursor-pointer"
               >
                 {isActive ? <Square className="w-8 h-8 fill-current" /> : <Play className="w-8 h-8 fill-current ml-1" />}
               </button>
               <button 
                 onClick={resetTimer}
-                className="w-14 h-14 rounded-full bg-white/5 border border-white/10 text-white/70 flex items-center justify-center hover:bg-white/10 hover:text-white transition-all hover:rotate-180 duration-500"
+                className="w-14 h-14 rounded-full bg-white/5 border border-white/10 text-white/70 flex items-center justify-center hover:bg-white/10 hover:text-white transition-all hover:rotate-180 duration-500 cursor-pointer"
                 title="Réinitialiser"
               >
                 <RotateCcw className="w-6 h-6" />

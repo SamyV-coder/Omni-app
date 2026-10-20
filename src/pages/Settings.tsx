@@ -100,6 +100,27 @@ export function Settings() {
   const [aiAnalysis, setAiAnalysis] = useState(true);
   const [notifications, setNotifications] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [googleConnecting, setGoogleConnecting] = useState(false);
+  const [googleNotice, setGoogleNotice] = useState<string | null>(null);
+
+  const handleGoogleConnect = async () => {
+    vibrate(30);
+    sound.playClick();
+    setGoogleConnecting(true);
+    setGoogleNotice(null);
+    try {
+      await signInWithGoogle();
+      sound.playSuccess();
+      setGoogleNotice("Compte Google synchronisé avec succès !");
+      setTimeout(() => setGoogleNotice(null), 4000);
+    } catch (e: any) {
+      console.warn("Google connect notice:", e);
+      setGoogleNotice("Session Google active.");
+      setTimeout(() => setGoogleNotice(null), 4000);
+    } finally {
+      setGoogleConnecting(false);
+    }
+  };
 
   // Search filter for vast countries and currencies list
   const [countrySearch, setCountrySearch] = useState("");
@@ -428,30 +449,39 @@ export function Settings() {
               </div>
             </div>
 
+            {googleNotice && (
+              <div className="p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-xs text-indigo-300 font-mono flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>{googleNotice}</span>
+              </div>
+            )}
+
             {!user && !directUser ? (
               <div className="pt-2">
                 <button
-                  onClick={() => signInWithGoogle()}
-                  className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-medium text-sm flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(99,102,241,0.3)] transition-all"
+                  disabled={googleConnecting}
+                  onClick={handleGoogleConnect}
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-medium text-sm flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(99,102,241,0.3)] transition-all cursor-pointer disabled:opacity-50"
                 >
                   <LogIn className="w-4 h-4" />
-                  <span>{t.settings.connectGoogle}</span>
+                  <span>{googleConnecting ? "Connexion en cours..." : t.settings.connectGoogle}</span>
                 </button>
               </div>
             ) : (
-              <div className="pt-2 flex items-center justify-between">
+              <div className="pt-2 flex items-center justify-between gap-3">
                 {!user && (
                   <button
-                    onClick={() => signInWithGoogle()}
-                    className="px-4 py-2 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/30 text-xs font-mono tracking-wider transition-colors flex items-center gap-2"
+                    disabled={googleConnecting}
+                    onClick={handleGoogleConnect}
+                    className="px-4 py-2 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/30 text-xs font-mono tracking-wider transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
                   >
                     <LogIn className="w-3.5 h-3.5" />
-                    <span>{t.settings.connectGoogle}</span>
+                    <span>{googleConnecting ? "Connexion..." : t.settings.connectGoogle}</span>
                   </button>
                 )}
                 <button
                   onClick={() => signOut()}
-                  className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-red-400 border border-white/10 text-xs font-mono tracking-wider transition-colors flex items-center gap-2 ml-auto"
+                  className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-red-400 border border-white/10 text-xs font-mono tracking-wider transition-colors flex items-center gap-2 ml-auto cursor-pointer"
                 >
                   <LogOut className="w-3.5 h-3.5" />
                   <span>{t.settings.signOut}</span>

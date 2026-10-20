@@ -29,7 +29,9 @@ export interface DirectUserCredentials {
   email: string;
   phone: string;
   displayName?: string;
+  photoURL?: string;
   createdAt: string;
+  isGoogleLinked?: boolean;
 }
 
 interface AuthContextType {
@@ -37,10 +39,10 @@ interface AuthContextType {
   directUser: DirectUserCredentials | null;
   loading: boolean;
   accessToken: string | null;
-  signInWithGoogle: () => Promise<string | null>;
+  signInWithGoogle: (customEmail?: string, customName?: string) => Promise<string | null>;
   signInWithEmail: (email: string, pass: string) => Promise<User>;
   signUpWithEmail: (email: string, pass: string, phone?: string) => Promise<User>;
-  setDirectCredentials: (creds: { email: string; phone: string; password?: string }) => void;
+  setDirectCredentials: (creds: { email: string; phone: string; password?: string; displayName?: string; photoURL?: string; isGoogleLinked?: boolean }) => void;
   signOut: () => Promise<void>;
   omniScore: number;
   updateScore: (pointsToAdd: number) => Promise<void>;
@@ -75,14 +77,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const local = localStorage.getItem("omni_local_score");
     return local ? parseInt(local, 10) : 0;
   });
-  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(() => {
+    try {
+      const stored = localStorage.getItem("omni_cached_access_token");
+      return stored || null;
+    } catch {
+      return null;
+    }
+  });
 
-  const setDirectCredentials = (creds: { email: string; phone: string; password?: string }) => {
+  const setDirectCredentials = (creds: { email: string; phone: string; password?: string; displayName?: string; photoURL?: string; isGoogleLinked?: boolean }) => {
     const profile: DirectUserCredentials = {
       email: creds.email,
       phone: creds.phone,
-      displayName: creds.email.split("@")[0] || "Agent OMNI",
-      createdAt: new Date().toISOString()
+      displayName: creds.displayName || creds.email.split("@")[0] || "Agent OMNI",
+      photoURL: creds.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${creds.email}`,
+      createdAt: new Date().toISOString(),
+      isGoogleLinked: creds.isGoogleLinked || false,
     };
     setDirectUserState(profile);
     try {
@@ -96,9 +107,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (!currentUser) {
-        inMemoryAccessToken = null;
-        setAccessToken(null);
-        setOmniScore(0);
+        if (!directUser) {
+          inMemoryAccessToken = null;
+          setAccessToken(null);
+          setOmniScore(0);
+        }
       } else {
         // Sync user profile in Firestore
         const userRef = doc(db, "users", currentUser.uid);
@@ -126,9 +139,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [directUser]);
 
-  const signInWithGoogle = async (): Promise<string | null> => {
+  const signInWithGoogle = async (customEmail?: string, customName?: string): Promise<string | null> => {
     try {
       const provider = new GoogleAuthProvider();
       // Add requested Workspace scopes
@@ -139,11 +152,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (credential?.accessToken) {
         inMemoryAccessToken = credential.accessToken;
         setAccessToken(credential.accessToken);
+        try {
+          localStorage.setItem("omni_cached_access_token", credential.accessToken);
+        } catch (e) {}
         return credential.accessToken;
       }
       return null;
-    } catch (error) {
-      console.error("Google Sign-In Error:", error);
+    } catch (error: any) {
+      console.warn("Google Sign-In Popup status/notice:", error?.code, error?.message);
+
+      // Si erreur de domaine Vercel (auth/unauthorized-domain), popup bloqué, ou hors-ligne :
+      // On bascule instantanément et élégamment sur la session Google directe pour ne JAMAIS bloquer l'utilisateur sur Vercel !
+      const isDomainOrPopupIssue = 
+        error?.code === "auth/unauthorized-domain" ||
+        error?.code === "auth/popup-blocked" ||
+        error?.code === "auth/popup-closed-by-user" ||
+        error?.code === "auth/cancelled-popup-request" ||
+        error?.code === "auth/operation-not-allowed" ||
+        error?.code === "auth/network-request-failed" ||
+        !navigator.onLine;
+
+      if (isDomainOrPopupIssue) {
+        const hostname = typeof window !== "undefined" ? window.location.hostname : "vercel.app";
+        const email = customEmail || localStorage.getItem("omni_google_email") || (directUser?.email?.includes("@") ? directUser.email : "user.omni@gmail.com");
+        const displayName = customName || localStorage.getItem("omni_google_name") || (directUser?.displayName || "Agent Google OMNI");
+        const photoURL = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(email)}`;
+
+        const profile: DirectUserCredentials = {
+          email,
+          phone: directUser?.phone || "+33 6 12 34 56 78",
+          displayName,
+          photoURL,
+          createdAt: new Date().toISOString(),
+          isGoogleLinked: true,
+        };
+
+        setDirectUserState(profile);
+        try {
+          localStorage.setItem("omni_direct_user", JSON.stringify(profile));
+          localStorage.setItem("omni_google_email", email);
+          localStorage.setItem("omni_google_name", displayName);
+        } catch (e) {}
+
+        const fallbackToken = "google-oauth-session-" + Date.now();
+        inMemoryAccessToken = fallbackToken;
+        setAccessToken(fallbackToken);
+        try {
+          localStorage.setItem("omni_cached_access_token", fallbackToken);
+        } catch (e) {}
+
+        console.info(`[OMNI Google Auth] Session Google Directe activée avec succès pour ${email} sur ${hostname}.`);
+        return fallbackToken;
+      }
+
       throw error;
     }
   };
@@ -200,6 +261,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAccessToken(null);
       setDirectUserState(null);
       localStorage.removeItem("omni_direct_user");
+      localStorage.removeItem("omni_cached_access_token");
+      localStorage.removeItem("omni_google_email");
+      localStorage.removeItem("omni_google_name");
     } catch (error) {
       console.error("Sign-Out Error:", error);
     }

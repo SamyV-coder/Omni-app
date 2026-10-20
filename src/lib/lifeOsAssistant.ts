@@ -200,6 +200,64 @@ export function detectActionFromText(userPrompt: string, aiReply?: string): Acti
     };
   }
 
+  // 8. Offline Mode Toggle Intent
+  if (
+    norm.includes("offline") ||
+    norm.includes("hors ligne") ||
+    norm.includes("hors-ligne") ||
+    norm.includes("coupe internet") ||
+    norm.includes("mode avion") ||
+    norm.includes("mode local") ||
+    norm.includes("sans reseau")
+  ) {
+    return {
+      type: "TOGGLE_OFFLINE",
+      target: "/settings",
+      title: "📡 Basculer le Mode Hors-Ligne",
+      detail: "offline_toggle",
+      autoExecute: false,
+    };
+  }
+
+  // 9. Upgrade / VIP Intent
+  if (
+    norm.includes("upgrade") ||
+    norm.includes("vip") ||
+    norm.includes("abonnement") ||
+    norm.includes("premium") ||
+    norm.includes("pass") ||
+    norm.includes("coach")
+  ) {
+    return {
+      type: "VIEW_UPGRADE",
+      target: "/upgrade",
+      title: "👑 Voir les Offres OMNI Upgrade",
+      detail: "upgrade",
+      autoExecute: false,
+    };
+  }
+
+  // 10. Gmail & Drive Workspace Intent
+  if (norm.includes("mail") || norm.includes("gmail") || norm.includes("courriel")) {
+    return {
+      type: "NAVIGATE",
+      target: "/gmail",
+      title: "✉️ Ouvrir Gmail",
+      detail: "gmail",
+      autoExecute: false,
+    };
+  }
+
+  if (norm.includes("drive") || norm.includes("fichier") || norm.includes("document") || norm.includes("stockage")) {
+    return {
+      type: "NAVIGATE",
+      target: "/drive",
+      title: "📁 Ouvrir Google Drive",
+      detail: "drive",
+      autoExecute: false,
+    };
+  }
+
   return undefined;
 }
 
@@ -310,6 +368,37 @@ export function generateLocalAssistantReply(userPrompt: string, userLanguage = "
   if (action?.type === "OPEN_SETTINGS") {
     return {
       reply: `J'ouvre tes paramètres système OMNI. Tu pourras y ajuster ta langue, ta devise monétaire principale, ton fuseau horaire, tes commandes vocales et personnaliser ton expérience.`,
+      action,
+    };
+  }
+
+  // 8. Offline Mode Toggle
+  if (action?.type === "TOGGLE_OFFLINE") {
+    return {
+      reply: `Bien reçu ! Le mode hors-ligne permet à toute l'application OMNI de fonctionner en autonomie totale : le GPS Radar, les alarmes et minuteurs Focus, le simulateur de budget et mon moteur de conversation local restent 100% opérationnels sans internet. Clique ci-dessous pour basculer !`,
+      action,
+    };
+  }
+
+  // 9. Upgrade / VIP
+  if (action?.type === "VIEW_UPGRADE") {
+    return {
+      reply: `Envie de passer au niveau supérieur ? Le Pass OMNI Upgrade et le Coach VIP te donnent accès à des sessions personnalisées, des modèles financiers exclusifs, un accès prioritaire et des bonus de points OMNI. Découvre les formules d'un clic !`,
+      action,
+    };
+  }
+
+  // 10. Workspace Gmail / Drive
+  if (action?.type === "NAVIGATE" && action.target === "/gmail") {
+    return {
+      reply: `J'ouvre ta messagerie Gmail. Tu pourras y consulter tes emails, répondre rapidement et utiliser la rédaction assistée par IA !`,
+      action,
+    };
+  }
+
+  if (action?.type === "NAVIGATE" && action.target === "/drive") {
+    return {
+      reply: `J'ouvre ton espace Google Drive pour explorer tes fichiers et documents synchronisés !`,
       action,
     };
   }

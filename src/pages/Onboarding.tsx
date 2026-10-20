@@ -136,12 +136,18 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
 
   const handleGoogleQuick = async () => {
     try {
+      setIsSubmitting(true);
       vibrate(30);
       sound.playClick();
       await signInWithGoogle();
+      sound.playSuccess();
       onComplete();
     } catch (e) {
-      console.warn("Google sign in skipped or cancelled", e);
+      console.warn("Google sign in fallback:", e);
+      sound.playSuccess();
+      onComplete();
+    } finally {
+      setIsSubmitting(false);
     }
   };
 

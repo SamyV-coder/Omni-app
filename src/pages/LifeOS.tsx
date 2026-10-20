@@ -18,11 +18,21 @@ import {
   Mic,
   MicOff,
   Volume2,
+  VolumeX,
   Bell,
   Wifi,
   WifiOff,
   Compass,
-  Smile
+  Smile,
+  History,
+  Plus,
+  MessageSquare,
+  Search,
+  Copy,
+  Check,
+  X,
+  ChevronRight,
+  Clock
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import ReactMarkdown from "react-markdown";
@@ -31,7 +41,7 @@ import { useAuth } from "../context/AuthContext";
 import { usePreferences } from "../context/PreferencesContext";
 import { useOffline } from "../context/OfflineContext";
 import { db, handleFirestoreError, OperationType } from "../lib/firebase";
-import { collection, addDoc, query, orderBy, onSnapshot } from "firebase/firestore";
+import { collection, addDoc, doc, setDoc, query, orderBy, onSnapshot } from "firebase/firestore";
 import { vibrate } from "../lib/utils";
 import { sound } from "../lib/sound";
 import { 
@@ -46,7 +56,7 @@ import {
   detectActionFromText 
 } from "../lib/lifeOsAssistant";
 
-interface Message {
+export interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
@@ -55,6 +65,14 @@ interface Message {
   action?: ActionPayload;
   suggestedPrompts?: string[];
   timestamp?: string;
+}
+
+export interface ChatSession {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messages: Message[];
 }
 
 const QUICK_ACTIONS = [
@@ -69,17 +87,140 @@ const QUICK_ACTIONS = [
 export function LifeOS() {
   const { user } = useAuth();
   const { language, currency, nationality } = usePreferences();
-  const { isOffline, toggleForceOffline, isOnline, forceOffline } = useOffline();
+  const { isOffline, toggleForceOffline } = useOffline();
   const navigate = useNavigate();
   const location = useLocation();
-  const [messages, setMessages] = useState<Message[]>([]);
+
+  // Multi-conversation Chat History Sessions
+  const [sessions, setSessions] = useState<ChatSession[]>(() => {
+    try {
+      const stored = localStorage.getItem("omni_lifeos_sessions");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      // Migration from single history if existed
+      const oldHistory = localStorage.getItem("omni_gemini_history");
+      if (oldHistory) {
+        const oldMessages = JSON.parse(oldHistory);
+        if (Array.isArray(oldMessages) && oldMessages.length > 0) {
+          return [{
+            id: "session-default",
+            title: oldMessages[0]?.content?.slice(0, 30) || "Conversation initiale",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            messages: oldMessages
+          }];
+        }
+      }
+    } catch (e) {
+      console.warn("Storage read error", e);
+    }
+    const initialSessionId = `session-${Date.now()}`;
+    return [{
+      id: initialSessionId,
+      title: "Nouvelle discussion",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      messages: []
+    }];
+  });
+
+  const [activeSessionId, setActiveSessionId] = useState<string>(() => {
+    return sessions[0]?.id || "session-default";
+  });
+
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [historySearch, setHistorySearch] = useState("");
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [speechInterim, setSpeechInterim] = useState("");
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [speakingId, setSpeakingId] = useState<string | null>(null);
+
   const recognitionRef = useRef<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const promptHandledRef = useRef<string | null>(null);
+
+  // Active session helper
+  const activeSession = sessions.find((s) => s.id === activeSessionId) || sessions[0];
+  const messages = activeSession?.messages || [];
+
+  // Persist sessions to localStorage
+  const saveSessionsToLocal = (newSessions: ChatSession[]) => {
+    setSessions(newSessions);
+    try {
+      localStorage.setItem("omni_lifeos_sessions", JSON.stringify(newSessions));
+    } catch (e) {
+      console.warn("Failed to persist sessions to local storage", e);
+    }
+  };
+
+  // Create brand new chat conversation
+  const handleNewConversation = () => {
+    vibrate(30);
+    sound.playClick();
+    const newSession: ChatSession = {
+      id: `session-${Date.now()}`,
+      title: "Nouvelle discussion",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      messages: []
+    };
+    const updated = [newSession, ...sessions];
+    saveSessionsToLocal(updated);
+    setActiveSessionId(newSession.id);
+    setIsHistoryOpen(false);
+  };
+
+  // Select a past conversation from history
+  const handleSelectSession = (id: string) => {
+    vibrate(25);
+    sound.playClick();
+    setActiveSessionId(id);
+    setIsHistoryOpen(false);
+  };
+
+  // Delete a specific session
+  const handleDeleteSession = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    vibrate(30);
+    sound.playClick();
+    const remaining = sessions.filter((s) => s.id !== id);
+    if (remaining.length === 0) {
+      const fresh: ChatSession = {
+        id: `session-${Date.now()}`,
+        title: "Nouvelle discussion",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        messages: []
+      };
+      saveSessionsToLocal([fresh]);
+      setActiveSessionId(fresh.id);
+    } else {
+      saveSessionsToLocal(remaining);
+      if (activeSessionId === id) {
+        setActiveSessionId(remaining[0].id);
+      }
+    }
+  };
+
+  // Clear all conversation history
+  const handleClearAllHistory = () => {
+    vibrate([40, 60, 40]);
+    sound.playClick();
+    const fresh: ChatSession = {
+      id: `session-${Date.now()}`,
+      title: "Nouvelle discussion",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      messages: []
+    };
+    saveSessionsToLocal([fresh]);
+    setActiveSessionId(fresh.id);
+    localStorage.removeItem("omni_gemini_history");
+  };
 
   // Check matching custom voice commands
   const checkCustomVoiceCommand = (text: string): boolean => {
@@ -114,8 +255,7 @@ export function LifeOS() {
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
       };
 
-      if (!user) setMessages((prev) => [...prev, assistantMsg]);
-      else saveMessage(assistantMsg);
+      appendMessageToActiveSession(assistantMsg);
 
       if (matched.actionType === "START_FOCUS") {
         setTimeout(() => {
@@ -150,7 +290,6 @@ export function LifeOS() {
         if (isFinal) {
           setIsListening(false);
           setSpeechInterim("");
-          // Check if matches custom voice command
           const matched = checkCustomVoiceCommand(transcript);
           if (!matched) {
             handleSend(transcript);
@@ -165,14 +304,13 @@ export function LifeOS() {
     );
 
     if (!recognizer) {
-      // Notification amicale si non supporté
       const fallbackVoiceMsg: Message = {
         id: Date.now().toString(),
         role: "assistant",
         content: "La reconnaissance vocale de ce navigateur n'est pas accessible. Tu peux m'écrire ta commande directement dans le champ de texte ci-dessous !",
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
       };
-      setMessages(prev => [...prev, fallbackVoiceMsg]);
+      appendMessageToActiveSession(fallbackVoiceMsg);
       return;
     }
 
@@ -182,50 +320,12 @@ export function LifeOS() {
     sound.playStart();
   };
 
-  // Charger l'historique depuis Firestore si connecté, sinon localStorage
-  useEffect(() => {
-    if (user && !isOffline) {
-      const q = query(
-        collection(db, "users", user.uid, "gemini_messages"),
-        orderBy("createdAt", "asc")
-      );
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const loaded: Message[] = [];
-        snapshot.forEach((doc) => {
-          const data = doc.data();
-          loaded.push({
-            id: doc.id,
-            role: data.role,
-            content: data.content,
-            isImage: Boolean(data.imageUrl),
-            imageUrl: data.imageUrl,
-            action: data.actionPayload ? JSON.parse(data.actionPayload) : undefined,
-            timestamp: data.createdAt ? new Date(data.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : undefined
-          });
-        });
-        if (loaded.length > 0) {
-          setMessages(loaded);
-        }
-      }, (error) => {
-        handleFirestoreError(error, OperationType.LIST, `users/${user.uid}/gemini_messages`);
-      });
-      return () => unsubscribe();
-    } else {
-      const saved = localStorage.getItem("omni_gemini_history");
-      if (saved) {
-        try {
-          setMessages(JSON.parse(saved));
-        } catch (e) {
-          console.error(e);
-        }
-      }
-    }
-  }, [user, isOffline]);
-
+  // Auto-scroll on new message
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
 
+  // Handle prefilled prompt via navigation state
   useEffect(() => {
     if (location.state?.prefilledPrompt && promptHandledRef.current !== location.state.prefilledPrompt) {
       promptHandledRef.current = location.state.prefilledPrompt;
@@ -233,31 +333,54 @@ export function LifeOS() {
     }
   }, [location.state]);
 
-  // Sauvegarder dans Firestore ou localStorage
-  const saveMessage = async (msg: Message) => {
-    // Toujours mettre en cache local
-    setMessages((prev) => {
-      const updated = [...prev, msg];
-      localStorage.setItem("omni_gemini_history", JSON.stringify(updated.slice(-30)));
+  // Append a message to the active conversation session and update title if needed
+  const appendMessageToActiveSession = (msg: Message) => {
+    setSessions((prevSessions) => {
+      const updated = prevSessions.map((session) => {
+        if (session.id === activeSessionId) {
+          const newMessages = [...session.messages, msg];
+          let newTitle = session.title;
+          // Auto title on first user message
+          if (session.title === "Nouvelle discussion" && msg.role === "user") {
+            const clean = msg.content.replace(/^\/image\s+/, "").trim();
+            newTitle = clean.length > 32 ? clean.slice(0, 32) + "..." : clean;
+          }
+          return {
+            ...session,
+            title: newTitle,
+            updatedAt: new Date().toISOString(),
+            messages: newMessages.slice(-50), // keep last 50
+          };
+        }
+        return session;
+      });
+
+      try {
+        localStorage.setItem("omni_lifeos_sessions", JSON.stringify(updated));
+      } catch (e) {}
+
+      // Sync with Firestore if logged in
+      if (user && !isOffline) {
+        try {
+          const sessionRef = doc(db, "users", user.uid, "lifeos_sessions", activeSessionId);
+          const current = updated.find((s) => s.id === activeSessionId);
+          if (current) {
+            setDoc(sessionRef, {
+              id: current.id,
+              userId: user.uid,
+              title: current.title,
+              updatedAt: current.updatedAt,
+              messageCount: current.messages.length,
+              lastMessage: msg.content.slice(0, 100),
+            }, { merge: true });
+          }
+        } catch (e) {
+          console.warn("Firestore session sync notice:", e);
+        }
+      }
+
       return updated;
     });
-
-    if (user && !isOffline) {
-      try {
-        await addDoc(collection(db, "users", user.uid, "gemini_messages"), {
-          id: msg.id,
-          userId: user.uid,
-          role: msg.role,
-          content: msg.content,
-          actionType: msg.action?.type || "",
-          actionPayload: msg.action ? JSON.stringify(msg.action) : "",
-          imageUrl: msg.imageUrl || "",
-          createdAt: new Date().toISOString(),
-        });
-      } catch (error) {
-        console.warn("Could not save to Firestore:", error);
-      }
-    }
   };
 
   const parseAction = (text: string): { cleanText: string; action?: ActionPayload } => {
@@ -297,6 +420,28 @@ export function LifeOS() {
     }
   };
 
+  const handleCopyMessage = (id: string, text: string) => {
+    vibrate(20);
+    sound.playClick();
+    navigator.clipboard?.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2500);
+  };
+
+  const handleSpeakMessage = (id: string, text: string) => {
+    if (speakingId === id) {
+      window.speechSynthesis?.cancel();
+      setSpeakingId(null);
+      return;
+    }
+    vibrate(20);
+    setSpeakingId(id);
+    // Strip markdown formatting before reading aloud
+    const plain = text.replace(/[*#_`>]/g, "").replace(/\[.*?\]\(.*?\)/g, "").trim();
+    speakText(plain);
+    setTimeout(() => setSpeakingId(null), 8000);
+  };
+
   const handleSend = async (customPrompt?: string) => {
     const textToSend = customPrompt || input;
     if (!textToSend.trim() || isTyping) return;
@@ -309,12 +454,7 @@ export function LifeOS() {
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     };
 
-    if (!user) {
-      setMessages((prev) => [...prev, userMsg]);
-    } else {
-      await saveMessage(userMsg);
-    }
-
+    appendMessageToActiveSession(userMsg);
     if (!customPrompt) setInput("");
     sound.playClick();
     setIsTyping(true);
@@ -355,8 +495,7 @@ export function LifeOS() {
           timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
         };
 
-        if (!user) setMessages(prev => [...prev, routineReply]);
-        else await saveMessage(routineReply);
+        appendMessageToActiveSession(routineReply);
         speakText(`Ta routine avec ${count} alarmes a été programmée.`);
       } catch (err) {
         console.error("Routine generation error:", err);
@@ -381,8 +520,7 @@ export function LifeOS() {
           },
           timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
         };
-        if (!user) setMessages(prev => [...prev, offlineImgMsg]);
-        else await saveMessage(offlineImgMsg);
+        appendMessageToActiveSession(offlineImgMsg);
         setIsTyping(false);
         return;
       }
@@ -404,8 +542,7 @@ export function LifeOS() {
             imageUrl: data.imageUrl,
             timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
           };
-          if (!user) setMessages(prev => [...prev, assistantMsg]);
-          else await saveMessage(assistantMsg);
+          appendMessageToActiveSession(assistantMsg);
         } else {
           throw new Error(data.error || "Génération impossible");
         }
@@ -416,8 +553,7 @@ export function LifeOS() {
           content: `⚠️ Erreur lors de la génération visuelle: ${error.message || "Service indisponible"}`,
           timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
         };
-        if (!user) setMessages(prev => [...prev, errorMsg]);
-        else await saveMessage(errorMsg);
+        appendMessageToActiveSession(errorMsg);
       } finally {
         setIsTyping(false);
       }
@@ -437,8 +573,7 @@ export function LifeOS() {
         suggestedPrompts: local.suggestedPrompts,
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
       };
-      if (!user) setMessages(prev => [...prev, assistantMsg]);
-      else await saveMessage(assistantMsg);
+      appendMessageToActiveSession(assistantMsg);
       setIsTyping(false);
       return;
     }
@@ -470,7 +605,6 @@ export function LifeOS() {
       const rawReply = data.reply || "";
 
       if (!rawReply || rawReply.includes("anomalie temporaire") || data.error) {
-        // En cas d'indisponibilité de l'API externe, fallback sur le moteur local chaleureux
         const local = generateLocalAssistantReply(textToSend, language);
         sound.playComplete();
         const assistantMsg: Message = {
@@ -481,11 +615,9 @@ export function LifeOS() {
           suggestedPrompts: local.suggestedPrompts,
           timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
         };
-        if (!user) setMessages(prev => [...prev, assistantMsg]);
-        else await saveMessage(assistantMsg);
+        appendMessageToActiveSession(assistantMsg);
       } else {
         const { cleanText, action: parsedAction } = parseAction(rawReply);
-        // Si Gemini n'a pas inclus de bloc d'action, le détecteur d'intention garantit l'action !
         const action = parsedAction || detectActionFromText(textToSend, cleanText);
         sound.playComplete();
 
@@ -496,9 +628,7 @@ export function LifeOS() {
           action,
           timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
         };
-
-        if (!user) setMessages(prev => [...prev, assistantMsg]);
-        else await saveMessage(assistantMsg);
+        appendMessageToActiveSession(assistantMsg);
       }
     } catch (error: any) {
       console.warn("Gemini network error, using local neuro assistant:", error);
@@ -512,18 +642,18 @@ export function LifeOS() {
         suggestedPrompts: local.suggestedPrompts,
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
       };
-      if (!user) setMessages(prev => [...prev, assistantMsg]);
-      else await saveMessage(assistantMsg);
+      appendMessageToActiveSession(assistantMsg);
     } finally {
       setIsTyping(false);
     }
   };
 
-  const handleClearHistory = () => {
-    vibrate(40);
-    setMessages([]);
-    localStorage.removeItem("omni_gemini_history");
-  };
+  // Filter sessions in history
+  const filteredSessions = sessions.filter((s) => {
+    if (!historySearch.trim()) return true;
+    const q = historySearch.toLowerCase();
+    return s.title.toLowerCase().includes(q) || s.messages.some(m => m.content.toLowerCase().includes(q));
+  });
 
   return (
     <motion.div
@@ -535,32 +665,57 @@ export function LifeOS() {
       {/* Background Glow */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.12),transparent_70%)] pointer-events-none" />
 
-      {/* Header */}
-      <header className="flex items-center justify-between shrink-0 mb-3 z-10">
-        <div className="flex items-center gap-4">
-          <div className="relative flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500/20 via-purple-500/20 to-blue-500/20 border border-indigo-500/30 shadow-[0_0_25px_rgba(99,102,241,0.3)]">
+      {/* Header with Multi-Chat Controls & Offline Toggle */}
+      <header className="flex items-center justify-between shrink-0 mb-3 z-10 flex-wrap gap-2">
+        <div className="flex items-center gap-3">
+          <div className="relative flex items-center justify-center w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500/20 via-purple-500/20 to-blue-500/20 border border-indigo-500/30 shadow-[0_0_25px_rgba(99,102,241,0.3)]">
             <div className="absolute inset-0 rounded-2xl bg-indigo-500/10 animate-ping opacity-25" />
-            <Sparkles className="w-6 h-6 text-indigo-400 relative z-10" />
+            <Sparkles className="w-5 h-5 text-indigo-400 relative z-10" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-3xl font-light tracking-tight text-white/95">LIFE OS</h1>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono tracking-widest uppercase bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                Copilote Universel
+              <h1 className="text-2xl font-light tracking-tight text-white/95">LIFE OS</h1>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono tracking-widest uppercase bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                Copilote Humain
               </span>
             </div>
-            <p className="text-white/40 text-xs font-mono tracking-widest uppercase mt-0.5">
-              Super-App Central Intelligence • S'exprime naturellement
+            <p className="text-white/40 text-xs font-mono tracking-wider truncate max-w-[200px] sm:max-w-xs">
+              {activeSession.title}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
+          {/* New Chat Button */}
+          <button
+            onClick={handleNewConversation}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/30 text-indigo-200 text-xs font-medium transition-all shadow-[0_0_15px_rgba(99,102,241,0.2)] cursor-pointer"
+            title="Démarrer une nouvelle discussion"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Nouveau Chat</span>
+          </button>
+
+          {/* History Drawer Toggle Button */}
+          <button
+            onClick={() => {
+              vibrate(20);
+              sound.playClick();
+              setIsHistoryOpen(true);
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/80 hover:text-white text-xs font-mono transition-all cursor-pointer"
+            title="Voir l'historique des discussions"
+          >
+            <History className="w-3.5 h-3.5 text-indigo-400" />
+            <span className="hidden sm:inline">Historique</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-white/10">{sessions.length}</span>
+          </button>
+
           {/* Offline / Online Status Badge & Toggle */}
           <button
             onClick={toggleForceOffline}
             title={isOffline ? "Mode hors-ligne actif (Clique pour repasser en ligne)" : "En ligne (Clique pour forcer le mode hors-ligne)"}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-mono border transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-mono border transition-all cursor-pointer ${
               isOffline
                 ? "bg-amber-500/15 border-amber-500/30 text-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.2)]"
                 : "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
@@ -569,27 +724,16 @@ export function LifeOS() {
             {isOffline ? (
               <>
                 <WifiOff className="w-3.5 h-3.5 text-amber-400" />
-                <span className="hidden sm:inline">Hors-Ligne (100% Autonome)</span>
-                <span className="sm:hidden">Hors-Ligne</span>
+                <span className="hidden md:inline">Hors-Ligne</span>
               </>
             ) : (
               <>
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                 <Wifi className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="hidden sm:inline">Connecté & Local</span>
+                <span className="hidden md:inline">En Ligne</span>
               </>
             )}
           </button>
-
-          {messages.length > 0 && (
-            <button
-              onClick={handleClearHistory}
-              title="Effacer la conversation"
-              className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/40 hover:text-red-400 border border-white/10 transition-colors"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          )}
         </div>
       </header>
 
@@ -607,9 +751,9 @@ export function LifeOS() {
         ))}
       </div>
 
-      {/* Chat Area */}
+      {/* Main Chat Area */}
       <div className="flex-1 rounded-3xl bg-black/50 border border-white/10 backdrop-blur-2xl overflow-hidden flex flex-col z-10 shadow-[inset_0_0_40px_rgba(255,255,255,0.02)]">
-        <div className="flex-1 overflow-y-auto p-5 md:p-8 space-y-6 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 custom-scrollbar">
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center p-6">
               <div className="relative mb-6">
@@ -688,14 +832,34 @@ export function LifeOS() {
                     }`}
                   >
                     {msg.role === "assistant" && (
-                      <div className="flex items-center gap-2 mb-3 pb-2 border-b border-white/10">
-                        <div className="w-5 h-5 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 flex items-center justify-center shadow-[0_0_10px_rgba(99,102,241,0.5)]">
-                          <Sparkles className="w-3 h-3 text-white" />
+                      <div className="flex items-center gap-2 mb-3 pb-2 border-b border-white/10 justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-5 h-5 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 flex items-center justify-center shadow-[0_0_10px_rgba(99,102,241,0.5)]">
+                            <Sparkles className="w-3 h-3 text-white" />
+                          </div>
+                          <span className="text-xs font-mono tracking-widest uppercase text-indigo-300">OMNI LIFE OS</span>
                         </div>
-                        <span className="text-xs font-mono tracking-widest uppercase text-indigo-300">OMNI LIFE OS</span>
-                        {msg.timestamp && (
-                          <span className="text-[10px] font-mono text-white/30 ml-auto">{msg.timestamp}</span>
-                        )}
+
+                        {/* Speech & Copy Controls for Human warmth */}
+                        <div className="flex items-center gap-1.5 opacity-60 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => handleSpeakMessage(msg.id, msg.content)}
+                            className="p-1 rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition-colors cursor-pointer"
+                            title={speakingId === msg.id ? "Arrêter la voix" : "Écouter la réponse"}
+                          >
+                            {speakingId === msg.id ? <VolumeX className="w-3.5 h-3.5 text-purple-300 animate-pulse" /> : <Volume2 className="w-3.5 h-3.5" />}
+                          </button>
+                          <button
+                            onClick={() => handleCopyMessage(msg.id, msg.content)}
+                            className="p-1 rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition-colors cursor-pointer"
+                            title="Copier le texte"
+                          >
+                            {copiedId === msg.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                          </button>
+                          {msg.timestamp && (
+                            <span className="text-[10px] font-mono text-white/30 ml-1">{msg.timestamp}</span>
+                          )}
+                        </div>
                       </div>
                     )}
 
@@ -756,8 +920,15 @@ export function LifeOS() {
                     )}
 
                     {msg.role === "user" && msg.timestamp && (
-                      <div className="text-[10px] font-mono text-white/30 text-right mt-2">
-                        {msg.timestamp}
+                      <div className="text-[10px] font-mono text-white/30 text-right mt-2 flex items-center justify-end gap-2">
+                        <span>{msg.timestamp}</span>
+                        <button
+                          onClick={() => handleCopyMessage(msg.id, msg.content)}
+                          className="text-white/30 hover:text-white/70 p-0.5 cursor-pointer"
+                          title="Copier"
+                        >
+                          {copiedId === msg.id ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                        </button>
                       </div>
                     )}
                   </div>
@@ -774,7 +945,7 @@ export function LifeOS() {
             >
               <div className="rounded-2xl px-5 py-3 bg-white/5 border border-white/10 flex items-center gap-3 text-indigo-400">
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span className="text-xs font-mono tracking-widest uppercase">Life OS analyse et prépare la réponse...</span>
+                <span className="text-xs font-mono tracking-widest uppercase">Life OS réfléchit et formule ta réponse...</span>
               </div>
             </motion.div>
           )}
@@ -844,6 +1015,123 @@ export function LifeOS() {
           </div>
         </div>
       </div>
+
+      {/* Chat History Slide-Over Drawer */}
+      <AnimatePresence>
+        {isHistoryOpen && (
+          <div className="fixed inset-0 z-50 flex justify-end">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsHistoryOpen(false)}
+              className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            />
+
+            {/* Panel */}
+            <motion.div
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="relative w-full max-w-sm h-full bg-[#08080c] border-l border-white/10 shadow-2xl flex flex-col z-10 p-6"
+            >
+              <div className="flex items-center justify-between pb-4 border-b border-white/10">
+                <div className="flex items-center gap-2">
+                  <History className="w-5 h-5 text-indigo-400" />
+                  <h3 className="text-lg font-medium text-white">Historique de Chat</h3>
+                </div>
+                <button
+                  onClick={() => setIsHistoryOpen(false)}
+                  className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/50 hover:text-white transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-4 pb-3 flex items-center gap-2">
+                <button
+                  onClick={handleNewConversation}
+                  className="flex-1 py-2 px-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-medium flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Nouvelle Conversation</span>
+                </button>
+                {sessions.length > 1 && (
+                  <button
+                    onClick={handleClearAllHistory}
+                    className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/40 hover:text-red-400 border border-white/10 transition-colors cursor-pointer"
+                    title="Effacer tout l'historique"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
+              {/* Search input in history */}
+              <div className="relative mb-4">
+                <Search className="w-3.5 h-3.5 text-white/40 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={historySearch}
+                  onChange={(e) => setHistorySearch(e.target.value)}
+                  placeholder="Rechercher une discussion..."
+                  className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-9 pr-3 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-indigo-500/50"
+                />
+              </div>
+
+              {/* Session list */}
+              <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                {filteredSessions.length === 0 ? (
+                  <div className="text-center py-12 text-white/40 text-xs">
+                    Aucune discussion trouvée.
+                  </div>
+                ) : (
+                  filteredSessions.map((s) => (
+                    <div
+                      key={s.id}
+                      onClick={() => handleSelectSession(s.id)}
+                      className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between group ${
+                        s.id === activeSessionId
+                          ? "bg-indigo-600/20 border-indigo-500/50 shadow-[0_0_15px_rgba(99,102,241,0.2)]"
+                          : "bg-white/[0.03] border-white/5 hover:bg-white/10 hover:border-white/15"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 overflow-hidden flex-1 mr-2">
+                        <MessageSquare className={`w-4 h-4 shrink-0 ${s.id === activeSessionId ? "text-indigo-400" : "text-white/40"}`} />
+                        <div className="overflow-hidden">
+                          <p className={`text-xs font-medium truncate ${s.id === activeSessionId ? "text-white font-semibold" : "text-white/80"}`}>
+                            {s.title}
+                          </p>
+                          <div className="flex items-center gap-2 text-[10px] text-white/40 font-mono mt-0.5">
+                            <Clock className="w-2.5 h-2.5" />
+                            <span>{new Date(s.updatedAt).toLocaleDateString([], { day: "numeric", month: "short" })}</span>
+                            <span>•</span>
+                            <span>{s.messages.length} msg</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={(e) => handleDeleteSession(e, s.id)}
+                          className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-500/20 text-white/40 hover:text-red-400 transition-all cursor-pointer"
+                          title="Supprimer cette discussion"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                        <ChevronRight className={`w-3.5 h-3.5 ${s.id === activeSessionId ? "text-indigo-400" : "text-white/20"}`} />
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
